@@ -8,10 +8,11 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 export PATH="$HOME/.local/bin:$PATH"
-uv tool install --upgrade graphifyy
+uv tool install 'graphifyy[sql]==0.9.93'
 
 graphify --version
-graphify .
+graphify extract . --code-only --max-workers 2
+graphify cluster-only . --no-label
 graphify hook install
 graphify hook status
 
