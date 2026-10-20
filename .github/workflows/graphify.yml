@@ -14,6 +14,7 @@ jobs:
   build-graph:
     name: Build Graphify graph
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,10 +22,17 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+      - name: Set up Python
+        run: uv python install 3.12
       - name: Install Graphify
-        run: uv tool install graphifyy
+        run: uv tool install --python 3.12 'graphifyy[sql]==0.9.93'
       - name: Build code knowledge graph
-        run: graphify .
+        run: |
+          graphify extract . --code-only --max-workers 2
+          graphify cluster-only . --no-label
+          test -s graphify-out/graph.json
+          test -s graphify-out/GRAPH_REPORT.md
+          test -s graphify-out/graph.html
       - name: Upload Graphify output
         uses: actions/upload-artifact@v4
         with:
