@@ -1,0 +1,10 @@
+BEGIN;
+SELECT plan(6);
+SELECT has_function('public','rpc_shift_history',ARRAY['uuid','uuid','date','date','text','timestamp with time zone','uuid'],'Shift history RPC exists');
+SELECT has_function('public','rpc_shift_summary',ARRAY['uuid','uuid','uuid'],'Shift summary RPC exists');
+SELECT has_function('public','rpc_shift_transactions',ARRAY['uuid','uuid','uuid','timestamp with time zone','text','uuid'],'Shift transactions RPC exists');
+SELECT ok(NOT has_function_privilege('authenticated','public.shift_history_access(uuid,uuid,uuid)','EXECUTE'),'Access helper is private');
+SELECT ok(NOT has_function_privilege('anon','public.rpc_shift_summary(uuid,uuid,uuid)','EXECUTE'),'Anonymous shift read denied');
+SELECT ok(has_function_privilege('authenticated','public.rpc_shift_history(uuid,uuid,date,date,text,timestamptz,uuid)','EXECUTE'),'Authenticated history uses scoped authorization');
+SELECT * FROM finish();
+ROLLBACK;

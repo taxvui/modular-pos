@@ -145,8 +145,16 @@ test('two real browser devices protect revisions, recover an offline cash sale a
   await a.locator('#refundForm button').click();await message(a,'Đã ghi nhận hoàn toàn bộ');assert.equal(await a.locator('[data-action=prepare-refund]').count(),0);
   const returned=await owner.client.request('/rest/v1/refunds?select=id,amount,method&payment_id=eq.'+onlinePayments[0].id);assert.equal(returned.length,1);assert.equal(Number(returned[0].amount),70000);assert.equal(returned[0].method,'CASH');
   await a.locator('#countedCash').fill('30000');await a.locator('#closeShiftForm button').click();await message(a,'Đã chốt ca');
-  const ownerShifts=await owner.client.request('/rest/v1/cash_shifts?select=expected_cash,difference&store_id=eq.'+workspace.store_id+'&opened_by=eq.'+owner.client.userId);assert.equal(ownerShifts.length,1);assert.equal(Number(ownerShifts[0].expected_cash),30000);assert.equal(Number(ownerShifts[0].difference),0);
+  const ownerShifts=await owner.client.request('/rest/v1/cash_shifts?select=id,expected_cash,difference&store_id=eq.'+workspace.store_id+'&opened_by=eq.'+owner.client.userId);assert.equal(ownerShifts.length,1);assert.equal(Number(ownerShifts[0].expected_cash),30000);assert.equal(Number(ownerShifts[0].difference),0);
   const afterRefund=await rpc(owner.client,'rpc_daily_report',{p_date:day});assert.equal(Number(afterRefund.gross),105000);assert.equal(Number(afterRefund.refunds),70000);
+  await b.locator('#shiftHistoryArea > summary').click();await b.locator('#shiftHistoryFilter').selectOption('CLOSED');await b.locator('#shiftHistoryForm button').click();await idle(b);
+  assert.match(await b.locator('#shiftHistoryStatus').textContent(),/Chỉ ca của tôi/);assert.equal(await b.locator('#shiftHistoryList li').count(),1);
+  assert.equal((await b.locator('#shiftHistoryList').textContent()).includes(ownerShifts[0].id),false);
+  await b.locator('#shiftHistoryList button').click();await idle(b);assert.match(await b.locator('#shiftDetailSummary').textContent(),/Tiền mặt dự kiến: 205\.000/);assert.match(await b.locator('#shiftDetailSummary').textContent(),/Hoàn tiền mặt: 0/);assert.equal(await b.locator('#shiftEventList li').count(),2);
+  await a.locator('#shiftHistoryArea > summary').click();await a.locator('#shiftHistoryFilter').selectOption('CLOSED');await a.locator('#shiftHistoryForm button').click();await idle(a);
+  assert.match(await a.locator('#shiftHistoryStatus').textContent(),/Toàn cửa hàng/);assert.equal(await a.locator('#shiftHistoryList li').count(),2);
+  await a.locator('#shiftHistoryList li').filter({hasText:ownerShifts[0].id}).locator('button').click();await idle(a);
+  assert.match(await a.locator('#shiftDetailSummary').textContent(),/Hoàn tiền mặt: 70\.000/);assert.match(await a.locator('#shiftDetailSummary').textContent(),/Tiền mặt dự kiến: 30\.000/);assert.equal(await a.locator('#shiftEventList li').count(),1);assert.match(await a.locator('#shiftEventList').textContent(),/Pilot owner full refund/);
   assert.equal(await a.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.deepEqual(f.errors,[]);
  }finally{await f.close();}
 });
