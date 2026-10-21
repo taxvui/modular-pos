@@ -141,6 +141,9 @@ test('two real browser devices protect revisions, recover an offline cash sale a
   await b.locator('#historyOrders button').click();await b.waitForFunction(()=>document.getElementById('historyReceipt').textContent.includes('Thu ròng'));
   assert.match(await b.locator('#historyReceipt').textContent(),/Đã thu 70\.000/);assert.match(await b.locator('#historyReceipt').textContent(),/Tiền thừa 30\.000/);
   assert.equal(await b.locator('[data-action=prepare-refund]').count(),0,'Cashier history never exposes refund preparation');
+  await b.locator('#historyReceipt details > summary').click();await b.locator('[data-action=load-order-events]').click();await idle(b);
+  assert.equal(await b.locator('[data-role=order-events-list] li').count(),4);assert.match(await b.locator('[data-role=order-events-list]').textContent(),/Chuyển bàn/);assert.match(await b.locator('[data-role=order-events-list]').textContent(),/Pilot guest moves table/);assert.match(await b.locator('[data-role=order-events-list]').textContent(),/Thu tiền/);assert.match(await b.locator('[data-role=order-events-list]').textContent(),/Tiền thừa 30\.000/);
+
   await a.locator('#logout').click();await a.locator('#loginPanel').waitFor({state:'visible'});await f.login(a,owner);
   await a.locator('#openingCash').fill('100000');await a.locator('#openShiftForm button').click();await message(a,'Đã mở ca.');
   await a.locator('#orderHistoryArea > summary').click();await a.locator('#historySearch').fill(original.order_id);await a.locator('#orderHistoryForm button').click();await idle(a);
@@ -152,6 +155,10 @@ test('two real browser devices protect revisions, recover an offline cash sale a
   await a.locator('#refundForm button').click();await message(a,'Chưa xác nhận');
   assert.equal((await owner.client.request('/rest/v1/refunds?select=id&payment_id=eq.'+onlinePayments[0].id)).length,1);
   await a.locator('#refundForm button').click();await message(a,'Đã ghi nhận hoàn toàn bộ');assert.equal(await a.locator('[data-action=prepare-refund]').count(),0);
+  await a.locator('#historyReceipt details > summary').click();await a.locator('[data-action=load-order-events]').click();await idle(a);
+  assert.equal(await a.locator('[data-role=order-events-list] li').count(),5);assert.match(await a.locator('[data-role=order-events-list]').textContent(),/Hoàn tiền/);assert.match(await a.locator('[data-role=order-events-list]').textContent(),/Pilot owner full refund/);
+  const eventResponse=await rpc(staff.client,'rpc_order_events',{p_order_id:original.order_id});assert.equal(eventResponse.events.length,5);assert.equal(eventResponse.events.filter(e=>e.action==='pos.order.transferred').length,1);assert.equal(eventResponse.events.filter(e=>e.action==='pos.payment.refunded').length,1);
+  assert.equal(eventResponse.events.find(e=>e.action==='pos.payment.refunded').actor_id,owner.client.userId);
   const returned=await owner.client.request('/rest/v1/refunds?select=id,amount,method&payment_id=eq.'+onlinePayments[0].id);assert.equal(returned.length,1);assert.equal(Number(returned[0].amount),70000);assert.equal(returned[0].method,'CASH');
   await a.locator('#countedCash').fill('30000');await a.locator('#closeShiftForm button').click();await message(a,'Đã chốt ca');
   const ownerShifts=await owner.client.request('/rest/v1/cash_shifts?select=id,expected_cash,difference&store_id=eq.'+workspace.store_id+'&opened_by=eq.'+owner.client.userId);assert.equal(ownerShifts.length,1);assert.equal(Number(ownerShifts[0].expected_cash),30000);assert.equal(Number(ownerShifts[0].difference),0);
