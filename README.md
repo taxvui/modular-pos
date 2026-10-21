@@ -47,7 +47,7 @@ PGlite dùng một Auth shim tối thiểu và bỏ qua extension pgcrypto (gen_
 
 Đặt `NEXT_PUBLIC_SUPABASE_URL` và `NEXT_PUBLIC_SUPABASE_ANON_KEY` khi build, rồi mở `/account`. Không đưa service-role key vào biến công khai. Nếu chưa cấu hình, trang hiển thị lỗi cấu hình và khóa đăng nhập.
 
-Chi tiết: [Hướng dẫn kiểm thử MVP](docs/development/mvp-foundation.md), [nhân viên](docs/development/staff-access.md), [phiên đăng nhập](docs/development/session-recovery.md), [lịch sử đơn](docs/development/order-history.md), [phục hồi lưu đơn](docs/development/order-save-recovery.md).
+Chi tiết: [Hướng dẫn kiểm thử MVP](docs/development/mvp-foundation.md), [nhân viên](docs/development/staff-access.md), [phiên đăng nhập](docs/development/session-recovery.md), [lịch sử đơn](docs/development/order-history.md), [đối soát ca](docs/development/shift-history.md), [phục hồi lưu đơn](docs/development/order-save-recovery.md).
 
 ## Thứ tự triển khai
 
