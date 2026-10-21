@@ -20,7 +20,7 @@ POS cho quán cà phê: tại chỗ, mang về, giao hàng; hướng tới SaaS 
 - Mời nhân viên bằng mã theo email, hai vai trò thu ngân/quản lý theo cửa hàng, đổi/ngừng quyền có audit và bảo vệ công việc chưa chốt.
 - Phiên tự làm mới khi thao tác lâu; khi phiên không hợp lệ, giao diện trở về đăng nhập và giữ hàng đợi đã lưu.
 - Yêu cầu lưu đơn online được ghi bền vững trước khi gửi; tải lại/đăng nhập lại có thể xác nhận bằng mã gốc nếu phản hồi bị mất.
-- Tra cứu lịch sử đơn theo ngày/trạng thái/mã đơn hoặc khách; xem snapshot món, tiền đã thu/hoàn và lý do hủy, phân trang theo cửa hàng.
+- Tra cứu lịch sử đơn theo ngày/trạng thái/mã đơn hoặc khách; xem snapshot món, tiền đã thu/hoàn và lý do hủy, phân trang theo cửa hàng; chọn giao dịch cũ để hoàn toàn bộ có kiểm soát.
 - Migration bổ sung cho cách ly tenant, kiểm soát chi nhánh, ràng buộc tenant trên khóa ngoại và chặn RPC sync chưa hoàn thiện.
 - Kiểm thử xác thực, cách ly dữ liệu trên PostgreSQL nhúng (PGlite), smoke test pgTAP và CI Supabase.
 - Graphify tạo graph, báo cáo và HTML qua GitHub Actions.

@@ -50,7 +50,7 @@ RPC đọc/ghi bảo vệ bằng tenant/store + permission. Owner hiện có quy
 - Hoàn tiền theo phương thức gốc; cần ca đang mở, phải thực sự hoàn tiền cho khách trước khi ghi nhận. Hoàn tiền mặt bị chặn nếu số tiền dự kiến trong ca không đủ. Không có tích hợp ngân hàng thực hiện chuyển tiền thay người dùng.
 - Chốt ca nhập thực đếm. Server lưu tiền dự kiến, tiền thực đếm và chênh lệch; ca đã đóng không thu thêm được.
 - Báo cáo ngày theo timezone cửa hàng, tách tổng thu và khoản hoàn theo ngày phát sinh. Đây là báo cáo thu tiền cơ bản, chưa phải báo cáo thuế/lợi nhuận/giá vốn.
-- Giới hạn hiện tại: thu đủ một lần, hoàn toàn bộ một lần; chưa hỗ trợ tách phương thức thanh toán, hoàn một phần, chi tiền ngoài hoàn đơn. Danh sách thanh toán/ca trên UI giới hạn 100 bản ghi, hiển thị 20 ca gần nhất. Các ca cũ hơn không được chọn từ UI hiện tại.
+- Giới hạn hiện tại: thu đủ một lần, hoàn toàn bộ một lần; chưa hỗ trợ tách phương thức thanh toán, hoàn một phần, chi tiền ngoài hoàn đơn. Danh sách thanh toán/ca gần nhất trên UI giới hạn 100 bản ghi, hiển thị 20 ca gần nhất. Có thể tra cứu giao dịch cũ trong lịch sử để chọn hoàn tiền ngoài danh sách 100 thanh toán. Các ca cũ hơn không được chọn từ UI hiện tại.
 - Browser CI kiểm tra UI 390px/1280px với API giả lập. Kiểm thử database dùng PostgreSQL và Supabase; browser test không thay thế tích hợp Auth/Supabase end-to-end thật.
 
 ## Tích hợp HTTP thật trên CI

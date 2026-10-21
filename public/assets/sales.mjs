@@ -7,7 +7,7 @@ const el=id=>document.getElementById(id);
 const money=value=>`${Number(value).toLocaleString('vi-VN')} ₫`;
 let api,store,context={},products=[],variants=[],modifiers=[],orders=[],cart=[],editing=null,pending=null,generation=0,dirty=false,currentShift=null,payments=[];
 let outbox=null,limited=false,reviewPanel=null,staffPanel=null,historyPanel=null;
-let saveRecovery=null,recoveryOwnsCart=false,activeRun=null;
+let saveRecovery=null,recoveryOwnsCart=false,activeRun=null,historyRefund=null;
 const connectionFailure=error=>error instanceof TypeError||error.status>=500||error.status===429;
 const status=text=>{el('salesStatus').textContent=text;};
 const rpc=(name,args)=>api.request(`/rest/v1/rpc/${name}`,{method:'POST',body:{p_org_id:store.organization_id,p_store_id:store.id,...args}});
@@ -17,14 +17,14 @@ function reset(){dirty=false;cart=[];editing=null;pending=null;el('customerName'
 async function run(action){
  if(activeRun?.generation===generation)return;
  const token={generation};token.finished=new Promise(resolve=>{token.resolve=resolve;});activeRun=token;
- document.querySelectorAll('#orderForm input,#orderForm select').forEach(node=>{node.disabled=true;});
+ document.querySelectorAll('#orderForm input,#orderForm select,#refundForm input,#refundForm select').forEach(node=>{node.disabled=true;});
  document.querySelectorAll('#salesPanel button').forEach(b=>{b.disabled=true;});
  el('stores').disabled=true;
  try{await action();}catch(error){
   const code=error.message;
-  const messages={SAVE_RECOVERY_REQUIRED:'Có yêu cầu lưu đơn chưa xác nhận tại máy. Hãy xác nhận lại yêu cầu gốc trước khi lưu tiếp.',LOCAL_WRITE_FAILED:'Không cập nhật được dữ liệu bền vững tại máy. Giữ trang mở, kiểm tra lưu trữ rồi xác nhận lại đúng yêu cầu.',LOCAL_STORAGE_UNAVAILABLE:'Không mở được dữ liệu tại máy. Cần khôi phục lưu trữ trình duyệt trước khi gửi đơn.',INVALID_HISTORY_FILTER:'Khoảng ngày cần từ 1 đến 93 ngày, bộ lọc và con trỏ trang phải hợp lệ.',ORDER_NOT_FOUND:'Không tìm thấy đơn tại cửa hàng đang chọn.',AUTH_REQUIRED:'Phiên đã hết hiệu lực. Đăng nhập lại để truy cập cửa hàng và hàng đợi tại máy.',SESSION_CHANGED:'Phiên làm việc đã thay đổi. Hãy kiểm tra tài khoản đang đăng nhập.',STAFF_HAS_OPEN_WORK:'Nhân viên còn ca đang mở hoặc đề nghị hủy offline chưa xử lý. Cần chốt/đối soát trước khi ngừng quyền.',SELF_ACCESS_PROTECTED:'Không thể tự thay quyền của phiên đang quản trị.',OWNER_ACCESS_PROTECTED:'Quyền chủ sở hữu được bảo vệ.',STAFF_ACCESS_MANAGED_ELSEWHERE:'Tài khoản có quyền tổ chức hoặc tùy chỉnh, không thay bằng vai trò cửa hàng tại đây.',INVITATION_ALREADY_OPEN:'Email đang có mã chờ tại cửa hàng này. Thu hồi mã cũ nếu muốn tạo lại.',STAFF_ALREADY_ACTIVE:'Nhân viên đã có quyền. Hãy đổi vai trò trong danh sách nhân viên.',INVITATION_ALREADY_USED:'Mã đã được tiếp nhận. Hãy quản lý quyền của nhân viên trong danh sách.',INVITATION_INVALID:'Mã không còn hợp lệ.',INVALID_STAFF_ROLE:'Vai trò chưa được hỗ trợ.',STAFF_NOT_FOUND:'Không tìm thấy nhân viên ở cửa hàng này.',STAFF_ROLE_CONFIGURATION_INVALID:'Vai trò hệ thống đã bị thay đổi. Cần kiểm tra cấu hình quyền trước khi cấp tiếp.',MEMBERSHIP_INACTIVE:'Thành viên tổ chức đang bị ngừng quyền.',ACCOUNT_DISABLED:'Hồ sơ tài khoản đang bị ngừng.',OFFLINE_REVIEW_REQUIRED:'Đơn đang được đề nghị hủy. Đã khóa gửi lại trong lúc quản lý đối soát.',CASH_REFUND_CONFIRMATION_REQUIRED:'Cần xác nhận đã hoàn đúng tiền cho khách trước khi duyệt hủy.',REVIEW_ALREADY_RESOLVED:'Đề nghị đã được xử lý. Hãy tải lại danh sách.',OFFLINE_SALE_ALREADY_COMMITTED:'Đơn đã lên server. Không thể hủy bản ghi offline; hãy kiểm tra đơn và dùng luồng hủy/hoàn tiền.',ONLINE_ORDER_EXISTS:'Server đã có đơn từ yêu cầu này. Hãy kiểm tra đơn trước khi xử lý; không tạo lại đơn mới.',REVIEW_NOT_FOUND:'Không tìm thấy đề nghị được cấp quyền.',OPEN_SHIFT_REQUIRED:'Bạn cần mở ca trước khi thu hoặc hoàn tiền.',INSUFFICIENT_PAYMENT:'Số tiền nhận chưa đủ hoặc vượt giới hạn cho phép.',TRANSFER_CONFIRMATION_REQUIRED:'Cần nhận đúng số tiền và xác nhận đã kiểm tra chuyển khoản.',CASH_INSUFFICIENT:'Tiền mặt dự kiến trong ca không đủ để hoàn đơn này.',SHIFT_CLOSED:'Ca đã đóng. Hãy tải lại dữ liệu.',REASON_REQUIRED:'Nhập lý do từ 3 đến 500 ký tự.',ORDER_FINALIZED:'Đơn đã hoàn tất. Không thể thu tiền hoặc sửa lần nữa.',VERSION_CONFLICT:'Đơn đã được máy khác cập nhật. Mở lại đơn để xem dữ liệu mới.',PERMISSION_DENIED:'Bạn chưa được cấp quyền thực hiện thao tác này.',IDEMPOTENCY_KEY_REUSED:'Yêu cầu đã thay đổi. Hãy tải lại danh sách đơn.', '23505':'Tên bàn bị trùng hoặc bàn đã có đơn đang mở.',VARIANT_UNAVAILABLE:'Một size đã ngừng bán. Hãy kiểm tra thực đơn.',DELIVERY_DETAILS_REQUIRED:'Đơn giao hàng cần số điện thoại và địa chỉ.'};
+  const messages={PAYMENT_ALREADY_REFUNDED:'Thanh toán này đã được hoàn. Không trả tiền cho khách lần nữa; kiểm tra chi tiết lịch sử.',PAYMENT_NOT_REFUNDABLE:'Đơn chưa có thanh toán hợp lệ để hoàn.',PAYMENT_NOT_FOUND:'Không tìm thấy thanh toán tại cửa hàng đang chọn.',SAVE_RECOVERY_REQUIRED:'Có yêu cầu lưu đơn chưa xác nhận tại máy. Hãy xác nhận lại yêu cầu gốc trước khi lưu tiếp.',LOCAL_WRITE_FAILED:'Không cập nhật được dữ liệu bền vững tại máy. Giữ trang mở, kiểm tra lưu trữ rồi xác nhận lại đúng yêu cầu.',LOCAL_STORAGE_UNAVAILABLE:'Không mở được dữ liệu tại máy. Cần khôi phục lưu trữ trình duyệt trước khi gửi đơn.',INVALID_HISTORY_FILTER:'Khoảng ngày cần từ 1 đến 93 ngày, bộ lọc và con trỏ trang phải hợp lệ.',ORDER_NOT_FOUND:'Không tìm thấy đơn tại cửa hàng đang chọn.',AUTH_REQUIRED:'Phiên đã hết hiệu lực. Đăng nhập lại để truy cập cửa hàng và hàng đợi tại máy.',SESSION_CHANGED:'Phiên làm việc đã thay đổi. Hãy kiểm tra tài khoản đang đăng nhập.',STAFF_HAS_OPEN_WORK:'Nhân viên còn ca đang mở hoặc đề nghị hủy offline chưa xử lý. Cần chốt/đối soát trước khi ngừng quyền.',SELF_ACCESS_PROTECTED:'Không thể tự thay quyền của phiên đang quản trị.',OWNER_ACCESS_PROTECTED:'Quyền chủ sở hữu được bảo vệ.',STAFF_ACCESS_MANAGED_ELSEWHERE:'Tài khoản có quyền tổ chức hoặc tùy chỉnh, không thay bằng vai trò cửa hàng tại đây.',INVITATION_ALREADY_OPEN:'Email đang có mã chờ tại cửa hàng này. Thu hồi mã cũ nếu muốn tạo lại.',STAFF_ALREADY_ACTIVE:'Nhân viên đã có quyền. Hãy đổi vai trò trong danh sách nhân viên.',INVITATION_ALREADY_USED:'Mã đã được tiếp nhận. Hãy quản lý quyền của nhân viên trong danh sách.',INVITATION_INVALID:'Mã không còn hợp lệ.',INVALID_STAFF_ROLE:'Vai trò chưa được hỗ trợ.',STAFF_NOT_FOUND:'Không tìm thấy nhân viên ở cửa hàng này.',STAFF_ROLE_CONFIGURATION_INVALID:'Vai trò hệ thống đã bị thay đổi. Cần kiểm tra cấu hình quyền trước khi cấp tiếp.',MEMBERSHIP_INACTIVE:'Thành viên tổ chức đang bị ngừng quyền.',ACCOUNT_DISABLED:'Hồ sơ tài khoản đang bị ngừng.',OFFLINE_REVIEW_REQUIRED:'Đơn đang được đề nghị hủy. Đã khóa gửi lại trong lúc quản lý đối soát.',CASH_REFUND_CONFIRMATION_REQUIRED:'Cần xác nhận đã hoàn đúng tiền cho khách trước khi duyệt hủy.',REVIEW_ALREADY_RESOLVED:'Đề nghị đã được xử lý. Hãy tải lại danh sách.',OFFLINE_SALE_ALREADY_COMMITTED:'Đơn đã lên server. Không thể hủy bản ghi offline; hãy kiểm tra đơn và dùng luồng hủy/hoàn tiền.',ONLINE_ORDER_EXISTS:'Server đã có đơn từ yêu cầu này. Hãy kiểm tra đơn trước khi xử lý; không tạo lại đơn mới.',REVIEW_NOT_FOUND:'Không tìm thấy đề nghị được cấp quyền.',OPEN_SHIFT_REQUIRED:'Bạn cần mở ca trước khi thu hoặc hoàn tiền.',INSUFFICIENT_PAYMENT:'Số tiền nhận chưa đủ hoặc vượt giới hạn cho phép.',TRANSFER_CONFIRMATION_REQUIRED:'Cần nhận đúng số tiền và xác nhận đã kiểm tra chuyển khoản.',CASH_INSUFFICIENT:'Tiền mặt dự kiến trong ca không đủ để hoàn đơn này.',SHIFT_CLOSED:'Ca đã đóng. Hãy tải lại dữ liệu.',REASON_REQUIRED:'Nhập lý do từ 3 đến 500 ký tự.',ORDER_FINALIZED:'Đơn đã hoàn tất. Không thể thu tiền hoặc sửa lần nữa.',VERSION_CONFLICT:'Đơn đã được máy khác cập nhật. Mở lại đơn để xem dữ liệu mới.',PERMISSION_DENIED:'Bạn chưa được cấp quyền thực hiện thao tác này.',IDEMPOTENCY_KEY_REUSED:'Yêu cầu đã thay đổi. Hãy tải lại danh sách đơn.', '23505':'Tên bàn bị trùng hoặc bàn đã có đơn đang mở.',VARIANT_UNAVAILABLE:'Một size đã ngừng bán. Hãy kiểm tra thực đơn.',DELIVERY_DETAILS_REQUIRED:'Đơn giao hàng cần số điện thoại và địa chỉ.'};
   status(messages[code]||'Chưa xác nhận được thao tác. Kiểm tra kết nối rồi thử lại cùng yêu cầu.');
- }finally{if(activeRun===token){activeRun=null;document.querySelectorAll('#salesPanel button').forEach(b=>{b.disabled=false;});el('saveOrder').disabled=!context.can_sell;el('stores').disabled=el('stores').options.length===0;renderSaveRecovery();}token.resolve();}
+ }finally{if(activeRun===token){activeRun=null;document.querySelectorAll('#salesPanel button').forEach(b=>{b.disabled=false;});el('saveOrder').disabled=!context.can_sell;el('stores').disabled=el('stores').options.length===0;document.querySelectorAll('#refundForm input,#refundForm select').forEach(node=>{node.disabled=false;});renderSaveRecovery();}token.resolve();}
 }
 function renderSelection(){
  const pid=el('productChoice').value;
@@ -189,6 +189,7 @@ priceRow('variant');
 window.addEventListener('workspace:ready',async e=>{
  const current=++generation;const detail=e.detail;
  staffPanel?.destroy();staffPanel=null;historyPanel?.destroy();historyPanel=null;
+ historyRefund=null;el('refundForm').reset();el('refundPayment').replaceChildren();el('refundTargetSummary').textContent='Chưa chọn thanh toán.';
  saveRecovery=null;recoveryOwnsCart=false;el('saveRecoveryArea').hidden=true;el('saveRecoveryInfo').textContent='';
  el('salesPanel').hidden=true;context={};limited=false;currentShift=null;payments=[];financePending.clear();reset();
  outbox=null;reviewPanel=null;el('offlineReviewArea').hidden=true;el('offlineReviewList').replaceChildren();
@@ -209,7 +210,7 @@ window.addEventListener('workspace:ready',async e=>{
   }
   if(current!==generation)return;
   await showOutbox();renderSaveRecovery();
-  historyPanel=new OrderHistoryPanel({client:api,store,canRead:context.can_sell||context.can_report,run,isCurrent:()=>current===generation});
+  historyPanel=new OrderHistoryPanel({client:api,store,canRead:context.can_sell||context.can_report,run,isCurrent:()=>current===generation,canRefund:()=>context.can_refund,onRefundSelected:prepareHistoryRefund});
   staffPanel=new StaffAccessPanel({client:api,store,canManage:context.can_manage_staff,run,isCurrent:()=>current===generation,message:status});
   reviewPanel=new OfflineReviewPanel({client:api,store,canReview:context.can_review_offline,run,isCurrent:()=>current===generation,onResolved:async receipt=>{
    const queue=outbox;
@@ -228,6 +229,31 @@ async function financial(name,args){
  const result=await rpc(name,{...args,p_operation_id:financePending.get(key)});
  financePending.delete(key);return result;
 }
+function clearRefundConfirmation(){el('refundConfirmed').checked=false;el('refundReason').value='';}
+function refundChoices(){
+ const selected=el('refundPayment').value;
+ const candidates=[...payments];if(historyRefund&&!candidates.some(p=>p.id===historyRefund.payment.id))candidates.unshift({...historyRefund.payment,order_id:historyRefund.order.id});
+ el('refundPayment').replaceChildren(option('','Chọn thanh toán'),...candidates.map(p=>option(p.id,`${p.order_id.slice(0,8)} · ${p.method==='CASH'?'Tiền mặt':'Chuyển khoản'} · ${money(p.amount)}`)));
+ if(candidates.some(p=>p.id===selected))el('refundPayment').value=selected;
+ if(el('refundPayment').value!==selected)clearRefundConfirmation();
+ refundSummary();
+}
+function refundSummary(){
+ const id=el('refundPayment').value,pay=payments.find(p=>p.id===id)||(historyRefund?.payment.id===id?{...historyRefund.payment,order_id:historyRefund.order.id}:null);
+ const customer=historyRefund?.payment.id===id?historyRefund.order.customer?.name:null;
+ el('refundTargetSummary').textContent=pay?'Đơn '+pay.order_id+' · Thanh toán '+pay.id+' · Hoàn toàn bộ '+money(pay.amount)+' · '+(pay.method==='CASH'?'Tiền mặt':'Chuyển khoản')+(customer?' · Khách: '+customer:''):'Chưa chọn thanh toán.';
+}
+el('refundPayment').addEventListener('change',()=>{clearRefundConfirmation();refundSummary();});
+el('refundReason').addEventListener('input',()=>{el('refundConfirmed').checked=false;});
+async function prepareHistoryRefund(data){
+ const current=generation;
+ const permissions=await rpc('rpc_store_context',{});if(current!==generation)return;
+ context=permissions;renderFinance();if(!context.can_refund)throw new Error('PERMISSION_DENIED');
+ await refreshFinance();if(current!==generation)return;if(!currentShift)throw new Error('OPEN_SHIFT_REQUIRED');
+ if(!data.payment?.id||data.payment.amount==null||!Number.isSafeInteger(Number(data.payment.amount))||Number(data.payment.amount)<0||data.payment.method!=='CASH'&&data.payment.method!=='TRANSFER')throw new Error('INVALID_SERVER_ACK');
+ historyRefund=data;clearRefundConfirmation();refundChoices();el('refundPayment').value=data.payment.id;refundSummary();el('refundArea').open=true;
+ el('refundReason').focus();status('Đã chọn giao dịch từ lịch sử. Kiểm tra mã đơn, số tiền và phương thức; chỉ xác nhận sau khi đã hoàn đủ tiền cho khách.');
+}
 function renderFinance(){
  el('offlineCashForm').hidden=!currentShift||!context.can_collect;
  el('financeArea').hidden=limited||!(context.can_manage_shift||context.can_collect||context.can_void);
@@ -241,12 +267,18 @@ function renderFinance(){
  el('reportArea').hidden=limited||!context.can_report;
 }
 async function refreshFinance(){
- const current=generation;
+ const current=generation,oldShift=currentShift?.id;
  const [shifts,paid,refunds,ownOpen]=await Promise.all([rows('cash_shifts','*','&order=opened_at.desc&limit=100'),rows('payments','*','&order=created_at.desc&limit=100'),rows('refunds','payment_id'),rows('cash_shifts','*',`&opened_by=eq.${api.userId}&closed_at=is.null&limit=1`)]);
  if(current!==generation)return;
  currentShift=ownOpen.find(s=>s.opened_by===api.userId&&!s.closed_at)||null;
  payments=paid.filter(p=>!refunds.some(r=>r.payment_id===p.id));
- el('refundPayment').replaceChildren(option('','Chọn thanh toán'),...payments.map(p=>option(p.id,`${p.order_id.slice(0,8)} · ${p.method==='CASH'?'Tiền mặt':'Chuyển khoản'} · ${money(p.amount)}`)));
+ if(historyRefund){
+  const selected=historyRefund;
+  const latest=await rpc('rpc_order_receipt',{p_order_id:selected.order.id});if(current!==generation)return;
+  if(latest.refund||latest.order?.order_status!=='PAID'||latest.payment?.id!==selected.payment.id){historyRefund=null;clearRefundConfirmation();}
+  else historyRefund=latest;
+ }
+ if(oldShift!==currentShift?.id)clearRefundConfirmation();refundChoices();
  el('shiftHistory').replaceChildren(...shifts.slice(0,20).map(s=>{const li=document.createElement('li');li.textContent=s.closed_at?`Ca ${s.id.slice(0,8)} · Dự kiến ${money(s.expected_cash)} · Thực đếm ${money(s.counted_cash)} · Lệch ${money(s.difference)}`:`Ca ${s.id.slice(0,8)} · Đang mở`;return li;}));
  if(!el('reportDate').value)el('reportDate').value=new Date().toLocaleDateString('sv-SE',{timeZone:store.timezone||'Asia/Ho_Chi_Minh'});
  renderFinance();
@@ -271,8 +303,9 @@ el('voidForm').addEventListener('submit',e=>{e.preventDefault();if(!editing||dir
  reset();el('voidForm').reset();await refresh();status('Đã hủy đơn và ghi nhận lý do.');
 });});
 el('refundForm').addEventListener('submit',e=>{e.preventDefault();if(!currentShift||!el('refundConfirmed').checked)return;run(async()=>{
- const current=generation;await financial('rpc_refund_payment',{p_payment_id:el('refundPayment').value,p_shift_id:currentShift.id,p_reason:el('refundReason').value.trim()});if(current!==generation)return;
- el('refundForm').reset();await refresh();status('Đã ghi nhận hoàn toàn bộ, giữ nguyên lịch sử thu tiền.');
+ const current=generation,paymentId=el('refundPayment').value,target=payments.find(p=>p.id===paymentId)||(historyRefund?.payment.id===paymentId?{order_id:historyRefund.order.id}:null);
+ await financial('rpc_refund_payment',{p_payment_id:paymentId,p_shift_id:currentShift.id,p_reason:el('refundReason').value.trim()});if(current!==generation)return;
+ historyRefund=null;el('refundForm').reset();await refresh();if(target?.order_id)await historyPanel?.receipt(target.order_id);status('Đã ghi nhận hoàn toàn bộ, giữ nguyên lịch sử thu tiền.');
 });});
 el('reportForm').addEventListener('submit',e=>{e.preventDefault();run(async()=>{
  const current=generation;const report=await rpc('rpc_daily_report',{p_date:el('reportDate').value});if(current!==generation)return;

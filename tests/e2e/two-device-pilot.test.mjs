@@ -42,12 +42,12 @@ async function fixture(){
  const a=await contextA.newPage(),b=await contextB.newPage(),errors=[];
  for(const page of [a,b])page.on('pageerror',error=>errors.push(error.message));
  const origin='http://127.0.0.1:'+server.address().port;
- const login=async page=>{
-  await page.goto(origin+'/pos');await page.locator('#email').fill(staff.email);await page.locator('#password').fill(staff.password);await page.locator('#loginForm button[type=submit]').click();
+ const login=async(page,account=staff)=>{
+  await page.goto(origin+'/pos');await page.locator('#email').fill(account.email);await page.locator('#password').fill(account.password);await page.locator('#loginForm button[type=submit]').click();
   await page.locator('#salesPanel').waitFor({state:'visible'});
   await page.waitForFunction(()=>!document.getElementById('reloadOrders').disabled);
  };
- return {url,owner,staff,workspace,product,rpc,contextA,a,b,errors,login,close:async()=>{await browser.close();await new Promise(r=>server.close(r));await Promise.all([owner.client.signOut(),staff.client.signOut()]);}};
+ return {url,owner,staff,workspace,product,rpc,contextA,a,b,errors,login,close:async()=>{await browser.close();await new Promise(r=>server.close(r));await Promise.allSettled([owner.client.signOut(),staff.client.signOut()]);}};
 }
 async function message(page,text){await page.waitForFunction(value=>document.getElementById('salesStatus').textContent.includes(value),text);}
 async function idle(page){await page.waitForFunction(()=>!document.getElementById('reloadOrders').disabled);}
@@ -131,6 +131,22 @@ test('two real browser devices protect revisions, recover an offline cash sale a
   await b.waitForFunction(()=>!document.getElementById('reloadOrders').disabled);assert.equal(await b.locator('#historyOrders li').count(),1);
   await b.locator('#historyOrders button').click();await b.waitForFunction(()=>document.getElementById('historyReceipt').textContent.includes('Thu ròng'));
   assert.match(await b.locator('#historyReceipt').textContent(),/Đã thu 70\.000/);assert.match(await b.locator('#historyReceipt').textContent(),/Tiền thừa 30\.000/);
+  assert.equal(await b.locator('[data-action=prepare-refund]').count(),0,'Cashier history never exposes refund preparation');
+  await a.locator('#logout').click();await a.locator('#loginPanel').waitFor({state:'visible'});await f.login(a,owner);
+  await a.locator('#openingCash').fill('100000');await a.locator('#openShiftForm button').click();await message(a,'Đã mở ca.');
+  await a.locator('#orderHistoryArea > summary').click();await a.locator('#historySearch').fill(original.order_id);await a.locator('#orderHistoryForm button').click();await idle(a);
+  await a.locator('#historyOrders button').click();await a.locator('[data-action=prepare-refund]').click();await message(a,'Đã chọn giao dịch từ lịch sử');
+  assert.equal(await a.locator('#refundPayment').inputValue(),onlinePayments[0].id);assert.match(await a.locator('#refundTargetSummary').textContent(),/70\.000/);
+  await a.locator('#refundReason').fill('Pilot owner full refund');await a.locator('#refundConfirmed').check();
+  let lostRefund=false;
+  await a.route('**/rpc/rpc_refund_payment',async route=>{if(route.request().method()!=='POST'||lostRefund)return route.continue();lostRefund=true;const response=await route.fetch();assert.equal(response.status(),200);await route.abort('failed');});
+  await a.locator('#refundForm button').click();await message(a,'Chưa xác nhận');
+  assert.equal((await owner.client.request('/rest/v1/refunds?select=id&payment_id=eq.'+onlinePayments[0].id)).length,1);
+  await a.locator('#refundForm button').click();await message(a,'Đã ghi nhận hoàn toàn bộ');assert.equal(await a.locator('[data-action=prepare-refund]').count(),0);
+  const returned=await owner.client.request('/rest/v1/refunds?select=id,amount,method&payment_id=eq.'+onlinePayments[0].id);assert.equal(returned.length,1);assert.equal(Number(returned[0].amount),70000);assert.equal(returned[0].method,'CASH');
+  await a.locator('#countedCash').fill('30000');await a.locator('#closeShiftForm button').click();await message(a,'Đã chốt ca');
+  const ownerShifts=await owner.client.request('/rest/v1/cash_shifts?select=expected_cash,difference&store_id=eq.'+workspace.store_id+'&opened_by=eq.'+owner.client.userId);assert.equal(ownerShifts.length,1);assert.equal(Number(ownerShifts[0].expected_cash),30000);assert.equal(Number(ownerShifts[0].difference),0);
+  const afterRefund=await rpc(owner.client,'rpc_daily_report',{p_date:day});assert.equal(Number(afterRefund.gross),105000);assert.equal(Number(afterRefund.refunds),70000);
   assert.equal(await a.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.deepEqual(f.errors,[]);
  }finally{await f.close();}
 });
