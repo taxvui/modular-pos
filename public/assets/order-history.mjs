@@ -4,8 +4,8 @@ const stateName={OPEN:'Đang mở',PAID:'Đã thanh toán',VOID:'Đã hủy',REF
 const channelName={TAKEAWAY:'Mang về',DINE_IN:'Tại bàn',DELIVERY:'Giao hàng'};
 const paragraph=text=>{const p=document.createElement('p');p.textContent=text;return p;};
 export class OrderHistoryPanel {
- constructor({client,store,canRead,run,isCurrent}){
-  Object.assign(this,{client,store,run,isCurrent,pages:[null],index:0,key:null,sequence:0});
+ constructor({client,store,canRead,run,isCurrent,canRefund=()=>false,onRefundSelected=()=>{}}){
+  Object.assign(this,{client,store,run,isCurrent,canRefund,onRefundSelected,pages:[null],index:0,key:null,sequence:0});
   el('orderHistoryArea').hidden=!canRead;if(!canRead)return;
   el('orderHistoryForm').onsubmit=e=>{e.preventDefault();run(()=>this.load());};
   el('previousHistory').onclick=()=>run(()=>this.load(this.pages[this.index-1],this.index-1));
@@ -38,7 +38,7 @@ export class OrderHistoryPanel {
   }));
   if(!result.orders.length)el('historyOrders').append(paragraph('Không có đơn phù hợp trong khoảng ngày đã chọn.'));
  }
- async receipt(id){
+ async receipt(id,{selectRefund=false}={}){
   if(!this.isCurrent())return;const sequence=++this.sequence;
   const data=await this.rpc('rpc_order_receipt',{p_order_id:id});
   if(!this.isCurrent()||sequence!==this.sequence)return;
@@ -53,6 +53,16 @@ export class OrderHistoryPanel {
   if(refund)nodes.push(paragraph('Đã hoàn '+money(refund.amount)+' · '+this.date(refund.created_at,data.timezone)+' · Lý do: '+refund.reason));
   if(data.void_reason)nodes.push(paragraph('Lý do hủy: '+data.void_reason));
   if(pay)nodes.push(paragraph('Thu ròng của đơn: '+money(Number(pay.amount)-Number(refund?.amount||0))));
+  const eligible=pay&&!refund&&order.order_status==='PAID';
+  if(eligible&&this.canRefund()){
+   const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='Chọn giao dịch này để hoàn tiền';button.dataset.action='prepare-refund';
+   button.onclick=()=>this.run(()=>this.receipt(id,{selectRefund:true}));nodes.push(button);
+  }
   el('historyReceipt').replaceChildren(...nodes);
+  if(selectRefund){
+   if(!this.canRefund())throw new Error('PERMISSION_DENIED');
+   if(!eligible)throw new Error(refund||order.order_status==='REFUNDED'?'PAYMENT_ALREADY_REFUNDED':'PAYMENT_NOT_REFUNDABLE');
+   await this.onRefundSelected(data);
+  }
  }
 }
