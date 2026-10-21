@@ -1,0 +1,12 @@
+BEGIN;
+SELECT plan(8);
+SELECT has_table('public','store_staff','Staff assignments are persisted');
+SELECT has_table('public','staff_invitations','Invitation verifiers are persisted privately');
+SELECT ok(NOT has_table_privilege('authenticated','public.staff_invitations','SELECT'),'Invitation verifier cannot be read directly');
+SELECT ok(NOT has_table_privilege('authenticated','public.store_staff','UPDATE'),'Direct privilege changes are denied');
+SELECT ok(NOT has_function_privilege('anon','public.rpc_accept_staff_invitation(text,text)','EXECUTE'),'Anonymous redemption is denied');
+SELECT ok(NOT has_function_privilege('authenticated','public.staff_role_id(uuid,text)','EXECUTE'),'Role creation helper is private');
+SELECT ok(NOT has_function_privilege('authenticated','public.staff_inviter_authorized(uuid,uuid,uuid)','EXECUTE'),'Actor permission helper is private');
+SELECT ok(EXISTS(SELECT 1 FROM public.permissions WHERE permission_key='pos.staff.manage' AND is_sensitive),'Staff management is a separate sensitive permission');
+SELECT * FROM finish();
+ROLLBACK;
