@@ -8,7 +8,7 @@ Mỗi trang tối đa 50 đơn, sắp theo ngày tạo giảm dần và UUID là
 
 **Xem chi tiết** hiển thị toàn bộ mã đơn, ngày tạo, loại phục vụ/bàn, thông tin khách, món/size/topping, giá lúc bán, tổng đơn, tiền đã thu, khách đưa, tiền thừa, khoản hoàn và lý do hoàn/hủy. Giá lấy từ snapshot order_items; thay đổi menu không sửa giao dịch cũ. Thu ròng là tổng tiền thanh toán trừ tiền đã hoàn của riêng đơn này, không phải doanh thu theo ngày. Ngày tạo đơn, ngày thu và ngày hoàn có thể khác nhau.
 
-Tra cứu không mở giỏ để sửa hoặc tự thu/hoàn tiền, không làm thay đổi giỏ đang soạn. Người có quyền hoàn tiền có thể chọn giao dịch từ chi tiết lịch sử để đưa vào biểu mẫu hoàn riêng, kể cả ngoài 100 thanh toán gần nhất; xem [hoàn tiền từ lịch sử](history-refund.md). Thu ngân có quyền ghi đơn hoặc người có quyền xem báo cáo được tra cứu tại cửa hàng đã cấp quyền. RPC kiểm tra quyền hiện tại trên từng yêu cầu; không cho anonymous hoặc tenant/cửa hàng khác đọc bằng cách đoán UUID.
+Chỉ tìm và xem chi tiết không tự mở giỏ để sửa hoặc thu/hoàn tiền, không làm thay đổi giỏ đang soạn. Người có quyền hoàn tiền có thể chọn giao dịch từ chi tiết lịch sử để đưa vào biểu mẫu hoàn riêng, kể cả ngoài 100 thanh toán gần nhất; xem [hoàn tiền từ lịch sử](history-refund.md). Thu ngân có quyền ghi đơn hoặc người có quyền xem báo cáo được tra cứu tại cửa hàng đã cấp quyền. RPC kiểm tra quyền hiện tại trên từng yêu cầu; không cho anonymous hoặc tenant/cửa hàng khác đọc bằng cách đoán UUID.
 
 Dữ liệu lịch sử không vào cache offline. Cần kết nối mạng để tìm và mở chi tiết; không hiển thị lịch sử đã tải của người trước khi đăng xuất/đổi cửa hàng/hết phiên. Không xóa hàng đợi IndexedDB. Danh sách chỉ bao gồm đơn đã tồn tại trên server, không bao gồm bản chỉ lưu tại thiết bị và đang chờ đồng bộ.
 
@@ -21,3 +21,5 @@ Dữ liệu lịch sử không vào cache offline. Cần kết nối mạng đ�
 Không triển khai xuất file, in hóa đơn, hoàn một phần, chỉnh đơn đã thanh toán hoặc báo cáo thuế/giá vốn trong đợt này. KDS, in và kho nguyên liệu/BOM vẫn tạm hoãn.
 
 Nhật ký thao tác được tải riêng trong chi tiết đơn; xem [nhật ký đơn](order-timeline.md). Việc đọc nhật ký không thay đổi đơn hoặc giỏ đang soạn.
+
+Đơn có trạng thái đang mở có nút **Mở đơn để sửa hoặc thu tiền** nếu có quyền bán hàng. Đọc [mở đơn từ lịch sử](history-open.md) về kiểm tra dữ liệu hiện tại và bảo vệ giỏ chưa lưu.
