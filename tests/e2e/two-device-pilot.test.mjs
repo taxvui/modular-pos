@@ -23,6 +23,7 @@ async function fixture(){
  const workspace=await owner.client.bootstrap({name:'Pilot '+suffix,slug:'pilot-'+suffix,storeName:'Pilot Main',address:'Test street'});
  const rpc=(client,name,args={})=>client.request('/rest/v1/rpc/'+name,{method:'POST',body:{p_org_id:workspace.organization_id,p_store_id:workspace.store_id,...args}});
  const product=await rpc(owner.client,'rpc_create_product',{p_product:{name:'Cà phê pilot',category:'Nước',variants:[{name:'M',price:35000}],modifiers:[]}});
+ const tables=await Promise.all(['Pilot A','Pilot B'].map(p_name=>rpc(owner.client,'rpc_create_position',{p_name})));
  const code=randomBytes(32).toString('base64url');
  await rpc(owner.client,'rpc_create_staff_invitation',{p_operation_id:randomUUID(),p_email:staff.email,p_role:'CASHIER',p_token:code});
  await staff.client.request('/rest/v1/rpc/rpc_accept_staff_invitation',{method:'POST',body:{p_token:code,p_full_name:'Thu ngân pilot'}});
@@ -47,7 +48,7 @@ async function fixture(){
   await page.locator('#salesPanel').waitFor({state:'visible'});
   await page.waitForFunction(()=>!document.getElementById('reloadOrders').disabled);
  };
- return {url,owner,staff,workspace,product,rpc,contextA,a,b,errors,login,close:async()=>{await browser.close();await new Promise(r=>server.close(r));await Promise.allSettled([owner.client.signOut(),staff.client.signOut()]);}};
+ return {url,owner,staff,workspace,product,tables,rpc,contextA,a,b,errors,login,close:async()=>{await browser.close();await new Promise(r=>server.close(r));await Promise.allSettled([owner.client.signOut(),staff.client.signOut()]);}};
 }
 async function message(page,text){await page.waitForFunction(value=>document.getElementById('salesStatus').textContent.includes(value),text);}
 async function idle(page){await page.waitForFunction(()=>!document.getElementById('reloadOrders').disabled);}
@@ -70,6 +71,7 @@ test('two real browser devices protect revisions, recover an offline cash sale a
   }
   await a.locator('#openingCash').fill('100000');await a.locator('#openShiftForm button').click();await message(a,'Đã mở ca.');
   await reload(b);assert.match(await b.locator('#shiftSummary').textContent(),/100\.000/);
+  await a.locator('#channelChoice').selectOption('DINE_IN');await a.locator('#positionChoice').selectOption(f.tables[0]);
   await a.locator('#addItem').click();let lostSave=false;let originalBody;
   await a.route('**/rpc/rpc_save_order',async route=>{
    if(route.request().method()!=='POST'||lostSave)return route.continue();
@@ -90,6 +92,13 @@ test('two real browser devices protect revisions, recover an offline cash sale a
   const stored=await staff.client.request('/rest/v1/orders?select=id,revision,total_amount,customer&id=eq.'+original.order_id);
   assert.equal(stored[0].revision,updated.revision);assert.equal(Number(stored[0].total_amount),70000);assert.notEqual(stored[0].customer.name,'Thay đổi từ bản cũ');
   await reload(b);await open(b,original.order_id);assert.match(await b.locator('#cartTotal').textContent(),/70\.000/);
+  await a.locator('#transferPosition').selectOption(f.tables[1]);await a.locator('#transferReason').fill('Pilot guest moves table');let lostTransfer=false;
+  await a.route('**/rpc/rpc_transfer_order',async route=>{if(route.request().method()!=='POST'||lostTransfer)return route.continue();lostTransfer=true;const response=await route.fetch();assert.equal(response.status(),200);await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Committed transfer response lost'})});});
+  await a.locator('#transferOrder').click();await message(a,'Chưa xác nhận');await idle(a);assert.equal(lostTransfer,true);assert.equal(await a.locator('#transferPosition').isDisabled(),true);assert.equal(await a.locator('#addItem').isDisabled(),true);
+  await a.locator('#transferOrder').click();await message(a,'Đã chuyển bàn');await idle(a);assert.equal(await a.locator('#positionChoice').inputValue(),f.tables[1]);assert.match(await a.locator('#cartTotal').textContent(),/70\.000/);
+  assert.equal((await owner.client.request('/rest/v1/audit_logs?select=id&action_key=eq.pos.order.transferred&entity_id=eq.'+original.order_id)).length,1);
+  await b.locator('#receivedAmount').fill('100000');await b.locator('#paymentForm button').click();await message(b,'máy khác cập nhật');
+  await reload(b);await open(b,original.order_id);assert.equal(await b.locator('#positionChoice').inputValue(),f.tables[1]);
   await b.locator('#receivedAmount').fill('100000');await b.locator('#paymentForm button').click();await message(b,'Đơn đã hoàn tất.');
   const onlinePayments=await staff.client.request('/rest/v1/payments?select=id,amount&order_id=eq.'+original.order_id);assert.equal(onlinePayments.length,1);assert.equal(Number(onlinePayments[0].amount),70000);
   // Device A still has its old order snapshot; finalized data cannot be collected twice.

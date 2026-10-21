@@ -37,7 +37,7 @@ Sau khi đăng nhập, chủ cửa hàng có thể mở phần Thực đơn & đ
 4. Mở lại đơn đã lưu. Server kiểm tra revision; nếu máy khác đã sửa, thao tác cũ bị từ chối.
 5. Server tính giá từ catalog và lưu snapshot. Gửi lại nguyên yêu cầu với cùng operation ID không tạo đơn mới; tái sử dụng ID với nội dung khác bị từ chối.
 
-Đơn đang mở có thể thu tiền sau khi mở ca. Chưa triển khai gộp/tách, tự đồng bộ hai màn hình hay lưu giỏ offline. Giỏ chưa bấm lưu vẫn mất khi tải lại; yêu cầu lưu đã gửi được phục hồi bằng [mã yêu cầu bền vững](order-save-recovery.md). Danh sách hiển thị tối đa 200 đơn đang mở gần nhất. Giá được tính lại theo catalog khi lưu, kể cả sửa đơn.
+Đơn đang mở có thể thu tiền sau khi mở ca. Có [chuyển đơn sang bàn trống](table-transfer.md) giữ nguyên giá đã lưu. Chưa triển khai gộp/tách, tự đồng bộ hai màn hình hay lưu giỏ offline. Giỏ chưa bấm lưu vẫn mất khi tải lại; yêu cầu lưu đã gửi được phục hồi bằng [mã yêu cầu bền vững](order-save-recovery.md). Danh sách hiển thị tối đa 200 đơn đang mở gần nhất. Giá được tính lại theo catalog khi lưu, kể cả sửa đơn.
 
 RPC đọc/ghi bảo vệ bằng tenant/store + permission. Owner hiện có quyền quản lý; thành viên chỉ có quyền truy cập chi nhánh chưa tự động được phép bán hoặc sửa menu. Thay đổi món, giá và đơn được ghi audit. Các API sync cũ vẫn bị khóa.
 
