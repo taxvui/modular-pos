@@ -19,7 +19,8 @@ async function perform(action) {
       email_not_confirmed: 'Hãy xác nhận email trước khi đăng nhập.',
       WORKSPACE_ALREADY_EXISTS: 'Tài khoản đã có không gian làm việc.',
       '23505': 'Tài khoản đã có không gian làm việc hoặc mã thương hiệu đã được sử dụng.',
-      AUTH_REQUIRED: 'Vui lòng đăng nhập lại.',
+      AUTH_REQUIRED: 'Phiên đăng nhập đã hết hiệu lực. Vui lòng đăng nhập lại; đơn đã lưu tại máy vẫn được giữ.',
+      SESSION_CHANGED: 'Phiên làm việc đã thay đổi. Vui lòng kiểm tra tài khoản đang đăng nhập.',
       INVITATION_INVALID: 'Mã không hợp lệ, đã hết hạn hoặc không dành cho email đang đăng nhập.',
       EMAIL_VERIFICATION_REQUIRED: 'Cần xác nhận email trước khi nhận quyền cửa hàng.',
       OWNER_ACCESS_PROTECTED: 'Không thể thay quyền chủ sở hữu bằng mã nhân viên.',
@@ -54,7 +55,11 @@ async function loadWorkspace(preferredStore) {
   selectedStore();
 }
 try {
-  client = new AuthClient(window.MODULAR_POS_CONFIG || {});
+  client = new AuthClient({...(window.MODULAR_POS_CONFIG || {}),onSessionEnd:({reason})=>{
+    stores=[];el('stores').replaceChildren();el('identity').textContent='';el('storeSummary').textContent='';el('joinStoreForm').reset();
+    panels();
+    if(reason==='EXPIRED')message('Phiên đăng nhập đã hết hiệu lực. Đăng nhập lại để tiếp tục đồng bộ; đơn đã lưu tại máy vẫn được giữ.');
+  }});
   message('Sẵn sàng đăng nhập.');
 } catch {
   message('Chưa cấu hình Supabase. Cần SUPABASE_URL và SUPABASE_ANON_KEY khi build.');
