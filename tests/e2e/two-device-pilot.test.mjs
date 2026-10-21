@@ -50,13 +50,14 @@ async function fixture(){
  return {url,owner,staff,workspace,product,rpc,contextA,a,b,errors,login,close:async()=>{await browser.close();await new Promise(r=>server.close(r));await Promise.all([owner.client.signOut(),staff.client.signOut()]);}};
 }
 async function message(page,text){await page.waitForFunction(value=>document.getElementById('salesStatus').textContent.includes(value),text);}
-async function reload(page){await page.locator('#reloadOrders').click();await message(page,'Đã tải dữ liệu mới nhất.');}
+async function idle(page){await page.waitForFunction(()=>!document.getElementById('reloadOrders').disabled);}
+async function reload(page){await page.locator('#reloadOrders').click();await message(page,'Đã tải dữ liệu mới nhất.');await idle(page);}
 async function save(page){
  const response=page.waitForResponse(r=>r.url().endsWith('/rpc/rpc_save_order')&&r.request().method()==='POST');
- await page.locator('#saveOrder').click();const result=await response;assert.equal(result.status(),200,'Save order HTTP status');const receipt=await result.json();await message(page,'Đã lưu đơn');return receipt;
+ await page.locator('#saveOrder').click();const result=await response;assert.equal(result.status(),200,'Save order HTTP status');const receipt=await result.json();await message(page,'Đã lưu đơn');await idle(page);return receipt;
 }
 async function open(page,id){
- const row=page.locator('#openOrders li').filter({hasText:id.slice(0,8)});await row.locator('button').click();await message(page,'Đã mở dữ liệu đơn từ server.');
+ const row=page.locator('#openOrders li').filter({hasText:id.slice(0,8)});await row.locator('button').click();await message(page,'Đã mở dữ liệu đơn từ server.');await idle(page);
 }
 
 test('two real browser devices protect revisions, recover an offline cash sale and reconcile one shift',{timeout:120000},async()=>{
