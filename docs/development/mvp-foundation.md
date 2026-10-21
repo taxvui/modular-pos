@@ -14,7 +14,7 @@
 
 - Token chỉ giữ trong bộ nhớ, không lưu localStorage; tải lại phải đăng nhập. Chưa tự refresh token hay hỗ trợ đăng nhập offline.
 - Email phải được xác nhận để tạo workspace. Đăng ký tự động cần cấu hình SMTP, redirect URL và chính sách Auth trên Supabase staging/production.
-- Mỗi tài khoản tự tạo tối đa một workspace trong đợt này. Chưa có giao diện mời nhân viên/gán vai trò. Menu và lưu đơn online được triển khai trong đợt tiếp theo ở bên dưới.
+- Mỗi tài khoản tự tạo tối đa một workspace. Chủ quán có thể mời nhân viên và quản lý hai vai trò theo cửa hàng; xem [hướng dẫn nhân viên](staff-access.md). Menu và lưu đơn online được mô tả ở bên dưới.
 - Bảng core mở quyền đọc qua RLS; ghi trực tiếp từ client bị khóa. RPC bootstrap ghi dữ liệu atomically, không nhận actor/role từ client.
 - RPC sync và view chẩn đoán cũ bị thu hồi quyền truy cập vì chưa đủ an toàn. Client cũ cần được thay bằng sync engine thật ở đợt sau.
 - Migration mới giữ nguyên các migration cũ, dùng ràng buộc composite để chặn ghép tenant/store/device sai. Nếu dữ liệu cũ vi phạm, migration phải dừng để sửa dữ liệu; không bỏ constraint.
