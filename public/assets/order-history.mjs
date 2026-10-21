@@ -4,8 +4,8 @@ const stateName={OPEN:'Đang mở',PAID:'Đã thanh toán',VOID:'Đã hủy',REF
 const channelName={TAKEAWAY:'Mang về',DINE_IN:'Tại bàn',DELIVERY:'Giao hàng'};
 const paragraph=text=>{const p=document.createElement('p');p.textContent=text;return p;};
 export class OrderHistoryPanel {
- constructor({client,store,canRead,run,isCurrent,canRefund=()=>false,onRefundSelected=()=>{}}){
-  Object.assign(this,{client,store,run,isCurrent,canRefund,onRefundSelected,pages:[null],index:0,key:null,sequence:0});
+ constructor({client,store,canRead,run,isCurrent,canRefund=()=>false,onRefundSelected=()=>{},canOpen=()=>false,onOpenOrder=()=>{}}){
+  Object.assign(this,{client,store,run,isCurrent,canRefund,onRefundSelected,canOpen,onOpenOrder,pages:[null],index:0,key:null,sequence:0});
   el('orderHistoryArea').hidden=!canRead;if(!canRead)return;
   el('orderHistoryForm').onsubmit=e=>{e.preventDefault();run(()=>this.load());};
   el('previousHistory').onclick=()=>run(()=>this.load(this.pages[this.index-1],this.index-1));
@@ -53,6 +53,10 @@ export class OrderHistoryPanel {
   if(refund)nodes.push(paragraph('Đã hoàn '+money(refund.amount)+' · '+this.date(refund.created_at,data.timezone)+' · Lý do: '+refund.reason));
   if(data.void_reason)nodes.push(paragraph('Lý do hủy: '+data.void_reason));
   if(pay)nodes.push(paragraph('Thu ròng của đơn: '+money(Number(pay.amount)-Number(refund?.amount||0))));
+  if(order.order_status==='OPEN'&&this.canOpen()){
+   const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='Mở đơn để sửa hoặc thu tiền';button.dataset.action='open-history-order';
+   button.onclick=()=>this.run(async()=>{if(!this.isCurrent()||!this.canOpen())return;await this.onOpenOrder(order.id);});nodes.push(button);
+  }
   const eligible=pay&&!refund&&order.order_status==='PAID';
   if(eligible&&this.canRefund()){
    const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='Chọn giao dịch này để hoàn tiền';button.dataset.action='prepare-refund';

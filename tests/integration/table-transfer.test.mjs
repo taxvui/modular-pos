@@ -37,6 +37,9 @@ test('real concurrent table transfers serialize with payment and preserve one re
  const [one,two]=await Promise.all([rpc('rpc_transfer_order',args),rpc('rpc_transfer_order',args)]);
  assert.equal(one.revision,2);assert.equal(two.revision,2);assert.ok(one.replayed||two.replayed);
  assert.equal((await a.request('/rest/v1/audit_logs?select=id&action_key=eq.pos.order.transferred&entity_id=eq.'+order.order_id)).length,1);
+ const current=await rpc('rpc_open_order',{p_order_id:order.order_id});assert.equal(current.order.revision,2);assert.equal(current.order.position_id,tables[1]);assert.equal(current.order.total_amount,35000);assert.equal(current.items[0].variant_id,variant);
+ await assert.rejects(b.request('/rest/v1/rpc/rpc_open_order',{method:'POST',body:{p_org_id:w.organization_id,p_store_id:w.store_id,p_order_id:order.order_id}}),/PERMISSION_DENIED/);
+
  const contender=await save(tables[0]);
  const race=await Promise.allSettled([rpc('rpc_transfer_order',{...args,p_expected_revision:2,p_position_id:tables[2],p_operation_id:randomUUID()}),rpc('rpc_transfer_order',{...args,p_order_id:contender.order_id,p_expected_revision:1,p_position_id:tables[2],p_operation_id:randomUUID()})]);
  assert.equal(race.filter(r=>r.status==='fulfilled').length,1);assert.match(race.find(r=>r.status==='rejected').reason.message,/POSITION_OCCUPIED/);
@@ -49,6 +52,7 @@ test('real concurrent table transfers serialize with payment and preserve one re
   assert.equal(outcome[1].status,'rejected');assert.match(outcome[1].reason.message,/VERSION_CONFLICT/);
  }else{
   assert.equal(outcome[1].status,'fulfilled');assert.match(outcome[0].reason.message,/ORDER_FINALIZED/);
+  await assert.rejects(rpc('rpc_open_order',{p_order_id:payOrder.order_id}),/ORDER_FINALIZED/);
  }
  await assert.rejects(b.request('/rest/v1/rpc/rpc_transfer_order',{method:'POST',body:{p_org_id:w.organization_id,p_store_id:w.store_id,...args}}),/PERMISSION_DENIED/);
  await Promise.all([a.signOut(),b.signOut()]);
