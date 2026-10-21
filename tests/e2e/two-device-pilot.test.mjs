@@ -111,6 +111,13 @@ test('two real browser devices protect revisions, recover an offline cash sale a
   assert.equal(shifts.length,1);assert.ok(shifts[0].closed_at);assert.equal(Number(shifts[0].expected_cash),205000);assert.equal(Number(shifts[0].difference),0);
   const day=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Ho_Chi_Minh'}),report=await rpc(owner.client,'rpc_daily_report',{p_date:day});
   assert.equal(Number(report.gross),105000);assert.equal(Number(report.refunds),0);assert.equal(Number(report.paid_orders),2);
+  await b.locator('#orderHistoryArea > summary').click();await b.locator('#historyFilter').selectOption('PAID');await b.locator('#orderHistoryForm button').click();
+  await b.waitForFunction(()=>document.getElementById('historyStatus').textContent.startsWith('Trang 1'));
+  assert.equal(await b.locator('#historyOrders li').count(),2);
+  await b.locator('#historySearch').fill(original.order_id);await b.locator('#orderHistoryForm button').click();
+  await b.waitForFunction(()=>!document.getElementById('reloadOrders').disabled);assert.equal(await b.locator('#historyOrders li').count(),1);
+  await b.locator('#historyOrders button').click();await b.waitForFunction(()=>document.getElementById('historyReceipt').textContent.includes('Thu ròng'));
+  assert.match(await b.locator('#historyReceipt').textContent(),/Đã thu 70\.000/);assert.match(await b.locator('#historyReceipt').textContent(),/Tiền thừa 30\.000/);
   assert.equal(await a.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.deepEqual(f.errors,[]);
  }finally{await f.close();}
 });
