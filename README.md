@@ -54,6 +54,6 @@ Chi tiết: [Hướng dẫn kiểm thử MVP](docs/development/mvp-foundation.md
 3. Ca, thanh toán, hủy/hoàn tiền, audit và báo cáo.
 4. IndexedDB, outbox, retry, idempotency và xử lý xung đột.
 5. Quản lý nhân viên và phục hồi phiên khi thao tác lâu.
-6. Pilot một cửa hàng/hai thiết bị, kiểm thử phục hồi và đối soát.
+6. [Pilot một cửa hàng/hai thiết bị](docs/development/two-device-pilot.md): CI có hai browser context dùng Auth/database thật; còn cần nghiệm thu trên thiết bị vật lý tại quán.
 
 Không tuyên bố hoàn thành theo số lượng file, tên phase hoặc dữ liệu demo.
