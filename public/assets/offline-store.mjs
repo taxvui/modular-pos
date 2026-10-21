@@ -27,7 +27,7 @@ export class OfflineStore {
       });
     } finally { db.close(); }
   }
-  async enqueue(payload, id = crypto.randomUUID(), display = {}) {
+  async enqueue(payload, id = crypto.randomUUID(), display = {}, { finishSave = false } = {}) {
     if (!payload || typeof payload !== 'object') throw new Error('INVALID_LOCAL_REQUEST');
     const record = { id: this.scope + ':sale:' + id, scope: this.scope, operationId: id,
       kind: 'sale', payload: structuredClone(payload), display: structuredClone(display), status: 'PENDING', createdAt: Date.now(), attempts: 0 };
@@ -38,6 +38,38 @@ export class OfflineStore {
           if (JSON.stringify(request.result.payload) !== JSON.stringify(record.payload)) { tx.abort(); return; }
           done(request.result);
         } else { store.add(record); done(record); }
+        if (finishSave) {
+          const pending = store.get(this.scope + ':order-save');
+          pending.onsuccess = () => { if (pending.result?.operationId === id) store.delete(pending.result.id); };
+        }
+      };
+    });
+  }
+  async pendingSave() {
+    return this.transact('readonly', (store, done) => {
+      const request = store.get(this.scope + ':order-save');
+      request.onsuccess = () => done(request.result || null);
+    });
+  }
+  async beginSave(payload, operationId, display = {}) {
+    const record = { id: this.scope + ':order-save', scope: this.scope, kind: 'order-save',
+      operationId, payload: structuredClone(payload), display: structuredClone(display), createdAt: Date.now() };
+    const saved = await this.transact('readwrite', (store, done) => {
+      const request = store.get(record.id);
+      request.onsuccess = () => {
+        if (request.result) done(request.result);
+        else { store.add(record); done(record); }
+      };
+    });
+    if (saved.operationId !== operationId || JSON.stringify(saved.payload) !== JSON.stringify(payload)) throw new Error('SAVE_RECOVERY_REQUIRED');
+    return saved;
+  }
+  async finishSave(operationId) {
+    return this.transact('readwrite', (store, done) => {
+      const request = store.get(this.scope + ':order-save');
+      request.onsuccess = () => {
+        if (request.result?.operationId === operationId) { store.delete(request.result.id); done(true); }
+        else done(false);
       };
     });
   }

@@ -46,7 +46,7 @@ for (const name of ['account.html', 'app-config.js', 'assets']) {
 
 // A complete shell is installed atomically. New workers wait for old tabs to close.
 const shellFiles = ['account.html', 'app-config.js', 'assets/account.mjs', 'assets/auth-client.mjs',
-  'assets/sales.mjs', 'assets/offline-store.mjs', 'assets/offline-review.mjs', 'assets/staff-access.mjs', 'assets/order-history.mjs', 'assets/pwa.mjs', 'service-worker.js'];
+  'assets/sales.mjs', 'assets/offline-store.mjs', 'assets/offline-review.mjs', 'assets/staff-access.mjs', 'assets/order-history.mjs', 'assets/order-save.mjs', 'assets/pwa.mjs', 'service-worker.js'];
 const shellHash = createHash('sha256');
 for (const file of shellFiles) shellHash.update(file).update(fs.readFileSync(path.join(publicDir, file)));
 const worker = fs.readFileSync(path.join(publicDir, 'service-worker.js'), 'utf8')

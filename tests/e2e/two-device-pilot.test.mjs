@@ -70,7 +70,20 @@ test('two real browser devices protect revisions, recover an offline cash sale a
   }
   await a.locator('#openingCash').fill('100000');await a.locator('#openShiftForm button').click();await message(a,'Đã mở ca.');
   await reload(b);assert.match(await b.locator('#shiftSummary').textContent(),/100\.000/);
-  await a.locator('#addItem').click();const original=await save(a);assert.equal(Number(original.total_amount),35000);
+  await a.locator('#addItem').click();let lostSave=false;let originalBody;
+  await a.route('**/rpc/rpc_save_order',async route=>{
+   if(route.request().method()!=='POST'||lostSave)return route.continue();
+   lostSave=true;originalBody=route.request().postDataJSON();const response=await route.fetch();assert.equal(response.status(),200);
+   await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Committed save response lost'})});
+  });
+  await a.locator('#saveOrder').click();await message(a,'Chưa xác nhận');
+  assert.equal((await staff.client.request('/rest/v1/orders?select=id&store_id=eq.'+workspace.store_id)).length,1);
+  await a.reload();await f.login(a);await a.locator('#saveRecoveryArea').waitFor({state:'visible'});
+  const recovered=a.waitForResponse(r=>r.url().endsWith('/rpc/rpc_save_order')&&r.request().method()==='POST');
+  await a.locator('#retryOrderSave').click();const recoveredResponse=await recovered;assert.equal(recoveredResponse.status(),200);
+  assert.deepEqual(recoveredResponse.request().postDataJSON(),originalBody);const original=await recoveredResponse.json();await message(a,'Đã lưu đơn');await idle(a);
+  assert.equal(Number(original.total_amount),35000);assert.equal(original.replayed,true);
+  assert.equal((await staff.client.request('/rest/v1/orders?select=id&store_id=eq.'+workspace.store_id)).length,1,'Reload recovery must not create another online order');
   await reload(b);await open(b,original.order_id);
   await a.locator('#addItem').click();const updated=await save(a);assert.equal(updated.order_id,original.order_id);assert.equal(Number(updated.total_amount),70000);
   await b.locator('#customerName').fill('Thay đổi từ bản cũ');await b.locator('#saveOrder').click();await message(b,'máy khác cập nhật');

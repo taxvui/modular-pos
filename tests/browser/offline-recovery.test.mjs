@@ -6,7 +6,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 
 async function fixture() {
- const state={outage:0,user:'user-a',version:'v1',breakInstall:false,htmlError:false,sync:[],reviews:[],allowReview:false,cancelCalls:[],reviewReadOutage:false,activeToken:'secret-session-token',rejectedToken:null,refreshCalls:[],refreshFailure:0};
+ const state={outage:0,user:'user-a',version:'v1',breakInstall:false,htmlError:false,sync:[],reviews:[],allowReview:false,cancelCalls:[],reviewReadOutage:false,activeToken:'secret-session-token',rejectedToken:null,refreshCalls:[],refreshFailure:0,saveCalls:[],savedOrders:[]};
  const root=path.resolve('public');
  const server=createServer(async(req,res)=>{
   const pathname=new URL(req.url,'http://local').pathname;
@@ -58,6 +58,13 @@ async function fixture() {
    }
    if(state.outage&&state.htmlError){res.writeHead(state.outage,{'Content-Type':'text/html'}).end('<h1>Gateway unavailable</h1>');return;}
    if(state.outage)return json({code:'PGRST000',message:state.outage===403?'PERMISSION_DENIED':'Unavailable'},state.outage);
+   if(pathname.endsWith('/rpc_save_order')){
+    state.saveCalls.push(body);let order=state.savedOrders.find(row=>row.operation_id===body.p_operation_id);
+    if(!order){order={id:'saved-'+state.savedOrders.length,operation_id:body.p_operation_id,channel:body.p_channel,order_status:'OPEN',customer:body.p_customer,total_amount:35000,revision:1};state.savedOrders.push(order);}
+    return json({order_id:order.id,revision:order.revision,total_amount:order.total_amount,status:'OPEN'});
+   }
+   if(pathname.endsWith('/orders'))return json(state.savedOrders);
+   if(pathname.endsWith('/order_items'))return json([{variant_id:'coffee-m',product_name:'Cà phê',variant_name:'M',quantity:1,unit_amount:35000,modifier_snapshot:[]}]);
    if(pathname.endsWith('/products'))return json([{id:'coffee',name:'Cà phê',category:'Nước',active:true}]);
    if(pathname.endsWith('/product_variants'))return json([{id:'coffee-m',product_id:'coffee',name:'M',price:35000,active:true}]);
    if(pathname.endsWith('/rpc_sync_offline_sale')){state.sync.push(body);return json({order_id:'synced-order',operation_id:body.p_operation_id});}
@@ -263,5 +270,49 @@ test('session refresh is shared; rejected refresh returns to login and preserves
   await page.locator('#syncOutbox').click();await page.waitForFunction(()=>document.getElementById('outboxSummary').textContent.startsWith('0 đơn'));
   assert.equal(state.sync.length,1);assert.equal(state.sync[0].p_operation_id,persisted[0].operationId);
   assert.deepEqual(errors,[]);
+ }finally{await f.close();}
+});
+
+
+test('an online save survives a committed 500, reload and account switch without a new operation',{timeout:90000},async()=>{
+ const f=await fixture(),{page,state,login}=f;const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const journal=()=>page.evaluate(async()=>{
+  const {OfflineStore}=await import('/assets/offline-store.mjs');return new OfflineStore({url:location.origin+'/backend',userId:'user-a',organizationId:'org',storeId:'store'}).pendingSave();
+ });
+ try{
+  await page.goto(f.origin+'/pos');await login();await page.locator('#salesPanel').waitFor({state:'visible'});await page.locator('#addItem').click();await page.locator('#customerName').fill('Khách phục hồi');
+  await page.route('**/rpc/rpc_save_order',async route=>{await route.fetch();await route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({message:'Gateway lost acknowledgement'})});},{times:1});
+  await page.locator('#saveOrder').click();await page.waitForFunction(()=>document.getElementById('salesStatus').textContent.includes('Chưa xác nhận'));
+  const original=await journal();assert.equal(original.operationId,state.saveCalls[0].p_operation_id);assert.equal(state.savedOrders.length,1);
+  assert.equal(await page.locator('#customerName').isDisabled(),true);assert.equal(await page.locator('#addItem').isDisabled(),true);assert.equal(await page.locator('#newOrder').isDisabled(),true);
+  assert.equal(JSON.stringify(original).includes('secret-'),false);
+  await page.reload();await login();await page.locator('#saveRecoveryArea').waitFor({state:'visible'});assert.equal(await page.locator('#customerName').inputValue(),'Khách phục hồi');
+  assert.equal((await journal()).operationId,original.operationId);
+  await page.locator('#logout').click();await page.locator('#loginPanel').waitFor({state:'visible'});assert.equal(await page.locator('#saveRecoveryInfo').textContent(),'');
+  state.user='user-b';await login();await page.locator('#salesPanel').waitFor({state:'visible'});assert.equal(await page.locator('#saveRecoveryArea').isVisible(),false);
+  await page.locator('#logout').click();await page.locator('#loginPanel').waitFor({state:'visible'});state.user='user-a';await login();await page.locator('#saveRecoveryArea').waitFor({state:'visible'});
+  await page.locator('#retryOrderSave').click();await page.waitForFunction(()=>document.getElementById('salesStatus').textContent.startsWith('Đã lưu đơn'));
+  assert.equal(state.saveCalls.length,2);assert.deepEqual(state.saveCalls[0],state.saveCalls[1]);assert.equal(state.savedOrders.length,1);assert.equal(await journal(),null);assert.equal(await page.locator('#newOrder').isDisabled(),false);
+  assert.deepEqual(errors,[]);
+ }finally{await f.close();}
+});
+
+test('IndexedDB reserves one immutable intent across tabs and failed cleanup cannot remove a newer intent',{timeout:60000},async()=>{
+ const f=await fixture(),{page}=f;
+ try{
+  await page.goto(f.origin+'/pos');const second=await f.context.newPage();await second.goto(f.origin+'/pos');
+  const run=(target,id)=>target.evaluate(async id=>{
+   const {OfflineStore}=await import('/assets/offline-store.mjs');const queue=new OfflineStore({url:location.origin+'/backend',userId:'user',organizationId:'org',storeId:'store'});
+   try{return {record:await queue.beginSave({p_customer:{name:id}},id,{})};}catch(e){return {error:e.message};}
+  },id);
+  const results=await Promise.all([run(page,'a'),run(second,'b')]);assert.equal(results.filter(r=>r.record).length,1);assert.equal(results.filter(r=>r.error==='SAVE_RECOVERY_REQUIRED').length,1);
+  const winner=results.find(r=>r.record).record;
+  const result=await page.evaluate(async winner=>{
+   const {OfflineStore}=await import('/assets/offline-store.mjs');const queue=new OfflineStore({url:location.origin+'/backend',userId:'user',organizationId:'org',storeId:'store'});
+   await queue.finishSave(winner.operationId);await queue.beginSave({p_customer:{name:'new'}},'new',{});await queue.finishSave(winner.operationId);return queue.pendingSave();
+  },winner);
+  assert.equal(result.operationId,'new');
+  const handed=await page.evaluate(async()=>{const {OfflineStore}=await import('/assets/offline-store.mjs');const q=new OfflineStore({url:location.origin+'/backend',userId:'user',organizationId:'org',storeId:'store'});await q.enqueue({p_customer:{name:'new'}},'new',{}, {finishSave:true});return {pending:await q.pendingSave(),sales:await q.list()};});
+  assert.equal(handed.pending,null);assert.equal(handed.sales.length,1);assert.equal(handed.sales[0].operationId,'new');
  }finally{await f.close();}
 });
