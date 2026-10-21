@@ -48,7 +48,7 @@ PGlite dùng một Auth shim tối thiểu và bỏ qua extension pgcrypto (gen_
 
 ## Cấu hình và kiểm thử tài khoản
 
-Đặt `NEXT_PUBLIC_SUPABASE_URL` và `NEXT_PUBLIC_SUPABASE_ANON_KEY` khi build, rồi mở `/account`. Không đưa service-role key vào biến công khai. Nếu chưa cấu hình, trang hiển thị lỗi cấu hình và khóa đăng nhập.
+Đặt `NEXT_PUBLIC_SUPABASE_URL` và `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (hoặc anon key tương thích) khi build, rồi mở `/account`. Không đưa service-role key vào biến công khai. Nếu chưa cấu hình, trang hiển thị lỗi cấu hình và khóa đăng nhập.
 
 Chi tiết: [Hướng dẫn kiểm thử MVP](docs/development/mvp-foundation.md), [nhân viên](docs/development/staff-access.md), [phiên đăng nhập](docs/development/session-recovery.md), [lịch sử đơn](docs/development/order-history.md), [đối soát ca](docs/development/shift-history.md), [chuyển bàn](docs/development/table-transfer.md), [nhật ký đơn](docs/development/order-timeline.md), [mở đơn từ lịch sử](docs/development/history-open.md), [phục hồi lưu đơn](docs/development/order-save-recovery.md).
 
@@ -60,5 +60,7 @@ Chi tiết: [Hướng dẫn kiểm thử MVP](docs/development/mvp-foundation.md
 4. IndexedDB, outbox, retry, idempotency và xử lý xung đột.
 5. Quản lý nhân viên và phục hồi phiên khi thao tác lâu.
 6. [Pilot một cửa hàng/hai thiết bị](docs/development/two-device-pilot.md): CI có hai browser context dùng Auth/database thật; còn cần nghiệm thu trên thiết bị vật lý tại quán.
+
+7. [Kiểm tra bản triển khai và nghiệm thu tại quán](docs/deployment/production-check.md): công cụ chỉ đọc kiểm tra shell/config/Auth/quyền anon; SMTP thực nhận, khôi phục sao lưu và thiết bị vật lý vẫn cần nghiệm thu.
 
 Không tuyên bố hoàn thành theo số lượng file, tên phase hoặc dữ liệu demo.

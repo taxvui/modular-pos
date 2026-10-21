@@ -50,3 +50,5 @@ Bộ tự động mô phỏng hai thiết bị bằng hai context trong một Ch
 **Giới hạn cần tuân thủ:** máy B hoặc máy chủ không biết đơn chưa đồng bộ chỉ nằm trên máy A đang offline. Việc chặn chốt ca ở A không bảo đảm B biết hàng đợi đó. Trước khi chốt ca hoặc ngừng quyền nhân viên, yêu cầu đồng bộ và đối soát trên mọi thiết bị dùng ca/tài khoản đó. Dữ liệu hai màn hình hiện cần bấm **Tải lại dữ liệu**; chưa có realtime tự cập nhật.
 
 Không dùng kết quả tự động để tuyên bố đã nghiệm thu tại quán, đã kiểm thử mất điện/hỏng thiết bị hoặc đã sẵn sàng production. SMTP, backup/restore database, chính sách vận hành và kiểm tra thiết bị thật vẫn cần xác nhận khi chạy pilot. KDS, in, kho nguyên liệu/BOM tiếp tục tạm hoãn.
+
+Trước khi chạy pilot trên URL thực, dùng [hướng dẫn kiểm tra triển khai](../deployment/production-check.md). Kết quả công cụ không thay thế nghiệm thu thiết bị, SMTP và backup/restore.

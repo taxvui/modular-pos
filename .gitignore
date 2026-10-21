@@ -39,3 +39,6 @@ public/app-config.js
 
 # Generated versioned offline worker
 public/sw.js
+
+public/deployment-manifest.json
+dist/deployment-manifest.json
