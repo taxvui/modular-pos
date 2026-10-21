@@ -1,3 +1,4 @@
+import { saveOrderDurably } from './order-save.mjs';
 import { OrderHistoryPanel } from './order-history.mjs';
 import { StaffAccessPanel } from './staff-access.mjs';
 import { OfflineStore, isUnresolved } from './offline-store.mjs';
@@ -6,6 +7,7 @@ const el=id=>document.getElementById(id);
 const money=value=>`${Number(value).toLocaleString('vi-VN')} ₫`;
 let api,store,context={},products=[],variants=[],modifiers=[],orders=[],cart=[],editing=null,pending=null,generation=0,dirty=false,currentShift=null,payments=[];
 let outbox=null,limited=false,reviewPanel=null,staffPanel=null,historyPanel=null;
+let saveRecovery=null,recoveryOwnsCart=false,activeRun=null;
 const connectionFailure=error=>error instanceof TypeError||error.status>=500||error.status===429;
 const status=text=>{el('salesStatus').textContent=text;};
 const rpc=(name,args)=>api.request(`/rest/v1/rpc/${name}`,{method:'POST',body:{p_org_id:store.organization_id,p_store_id:store.id,...args}});
@@ -13,13 +15,16 @@ const rows=(table,select='*',extra='')=>api.request(`/rest/v1/${table}?select=${
 function option(value,label){const o=document.createElement('option');o.value=value;o.textContent=label;return o;}
 function reset(){dirty=false;cart=[];editing=null;pending=null;el('customerName').value='';el('customerPhone').value='';el('customerAddress').value='';renderCart();}
 async function run(action){
+ if(activeRun?.generation===generation)return;
+ const token={generation};token.finished=new Promise(resolve=>{token.resolve=resolve;});activeRun=token;
+ document.querySelectorAll('#orderForm input,#orderForm select').forEach(node=>{node.disabled=true;});
  document.querySelectorAll('#salesPanel button').forEach(b=>{b.disabled=true;});
  el('stores').disabled=true;
  try{await action();}catch(error){
   const code=error.message;
-  const messages={INVALID_HISTORY_FILTER:'Khoảng ngày cần từ 1 đến 93 ngày, bộ lọc và con trỏ trang phải hợp lệ.',ORDER_NOT_FOUND:'Không tìm thấy đơn tại cửa hàng đang chọn.',AUTH_REQUIRED:'Phiên đã hết hiệu lực. Đăng nhập lại để truy cập cửa hàng và hàng đợi tại máy.',SESSION_CHANGED:'Phiên làm việc đã thay đổi. Hãy kiểm tra tài khoản đang đăng nhập.',STAFF_HAS_OPEN_WORK:'Nhân viên còn ca đang mở hoặc đề nghị hủy offline chưa xử lý. Cần chốt/đối soát trước khi ngừng quyền.',SELF_ACCESS_PROTECTED:'Không thể tự thay quyền của phiên đang quản trị.',OWNER_ACCESS_PROTECTED:'Quyền chủ sở hữu được bảo vệ.',STAFF_ACCESS_MANAGED_ELSEWHERE:'Tài khoản có quyền tổ chức hoặc tùy chỉnh, không thay bằng vai trò cửa hàng tại đây.',INVITATION_ALREADY_OPEN:'Email đang có mã chờ tại cửa hàng này. Thu hồi mã cũ nếu muốn tạo lại.',STAFF_ALREADY_ACTIVE:'Nhân viên đã có quyền. Hãy đổi vai trò trong danh sách nhân viên.',INVITATION_ALREADY_USED:'Mã đã được tiếp nhận. Hãy quản lý quyền của nhân viên trong danh sách.',INVITATION_INVALID:'Mã không còn hợp lệ.',INVALID_STAFF_ROLE:'Vai trò chưa được hỗ trợ.',STAFF_NOT_FOUND:'Không tìm thấy nhân viên ở cửa hàng này.',STAFF_ROLE_CONFIGURATION_INVALID:'Vai trò hệ thống đã bị thay đổi. Cần kiểm tra cấu hình quyền trước khi cấp tiếp.',MEMBERSHIP_INACTIVE:'Thành viên tổ chức đang bị ngừng quyền.',ACCOUNT_DISABLED:'Hồ sơ tài khoản đang bị ngừng.',OFFLINE_REVIEW_REQUIRED:'Đơn đang được đề nghị hủy. Đã khóa gửi lại trong lúc quản lý đối soát.',CASH_REFUND_CONFIRMATION_REQUIRED:'Cần xác nhận đã hoàn đúng tiền cho khách trước khi duyệt hủy.',REVIEW_ALREADY_RESOLVED:'Đề nghị đã được xử lý. Hãy tải lại danh sách.',OFFLINE_SALE_ALREADY_COMMITTED:'Đơn đã lên server. Không thể hủy bản ghi offline; hãy kiểm tra đơn và dùng luồng hủy/hoàn tiền.',ONLINE_ORDER_EXISTS:'Server đã có đơn từ yêu cầu này. Hãy kiểm tra đơn trước khi xử lý; không tạo lại đơn mới.',REVIEW_NOT_FOUND:'Không tìm thấy đề nghị được cấp quyền.',OPEN_SHIFT_REQUIRED:'Bạn cần mở ca trước khi thu hoặc hoàn tiền.',INSUFFICIENT_PAYMENT:'Số tiền nhận chưa đủ hoặc vượt giới hạn cho phép.',TRANSFER_CONFIRMATION_REQUIRED:'Cần nhận đúng số tiền và xác nhận đã kiểm tra chuyển khoản.',CASH_INSUFFICIENT:'Tiền mặt dự kiến trong ca không đủ để hoàn đơn này.',SHIFT_CLOSED:'Ca đã đóng. Hãy tải lại dữ liệu.',REASON_REQUIRED:'Nhập lý do từ 3 đến 500 ký tự.',ORDER_FINALIZED:'Đơn đã hoàn tất. Không thể thu tiền hoặc sửa lần nữa.',VERSION_CONFLICT:'Đơn đã được máy khác cập nhật. Mở lại đơn để xem dữ liệu mới.',PERMISSION_DENIED:'Bạn chưa được cấp quyền thực hiện thao tác này.',IDEMPOTENCY_KEY_REUSED:'Yêu cầu đã thay đổi. Hãy tải lại danh sách đơn.', '23505':'Tên bàn bị trùng hoặc bàn đã có đơn đang mở.',VARIANT_UNAVAILABLE:'Một size đã ngừng bán. Hãy kiểm tra thực đơn.',DELIVERY_DETAILS_REQUIRED:'Đơn giao hàng cần số điện thoại và địa chỉ.'};
+  const messages={SAVE_RECOVERY_REQUIRED:'Có yêu cầu lưu đơn chưa xác nhận tại máy. Hãy xác nhận lại yêu cầu gốc trước khi lưu tiếp.',LOCAL_WRITE_FAILED:'Không cập nhật được dữ liệu bền vững tại máy. Giữ trang mở, kiểm tra lưu trữ rồi xác nhận lại đúng yêu cầu.',LOCAL_STORAGE_UNAVAILABLE:'Không mở được dữ liệu tại máy. Cần khôi phục lưu trữ trình duyệt trước khi gửi đơn.',INVALID_HISTORY_FILTER:'Khoảng ngày cần từ 1 đến 93 ngày, bộ lọc và con trỏ trang phải hợp lệ.',ORDER_NOT_FOUND:'Không tìm thấy đơn tại cửa hàng đang chọn.',AUTH_REQUIRED:'Phiên đã hết hiệu lực. Đăng nhập lại để truy cập cửa hàng và hàng đợi tại máy.',SESSION_CHANGED:'Phiên làm việc đã thay đổi. Hãy kiểm tra tài khoản đang đăng nhập.',STAFF_HAS_OPEN_WORK:'Nhân viên còn ca đang mở hoặc đề nghị hủy offline chưa xử lý. Cần chốt/đối soát trước khi ngừng quyền.',SELF_ACCESS_PROTECTED:'Không thể tự thay quyền của phiên đang quản trị.',OWNER_ACCESS_PROTECTED:'Quyền chủ sở hữu được bảo vệ.',STAFF_ACCESS_MANAGED_ELSEWHERE:'Tài khoản có quyền tổ chức hoặc tùy chỉnh, không thay bằng vai trò cửa hàng tại đây.',INVITATION_ALREADY_OPEN:'Email đang có mã chờ tại cửa hàng này. Thu hồi mã cũ nếu muốn tạo lại.',STAFF_ALREADY_ACTIVE:'Nhân viên đã có quyền. Hãy đổi vai trò trong danh sách nhân viên.',INVITATION_ALREADY_USED:'Mã đã được tiếp nhận. Hãy quản lý quyền của nhân viên trong danh sách.',INVITATION_INVALID:'Mã không còn hợp lệ.',INVALID_STAFF_ROLE:'Vai trò chưa được hỗ trợ.',STAFF_NOT_FOUND:'Không tìm thấy nhân viên ở cửa hàng này.',STAFF_ROLE_CONFIGURATION_INVALID:'Vai trò hệ thống đã bị thay đổi. Cần kiểm tra cấu hình quyền trước khi cấp tiếp.',MEMBERSHIP_INACTIVE:'Thành viên tổ chức đang bị ngừng quyền.',ACCOUNT_DISABLED:'Hồ sơ tài khoản đang bị ngừng.',OFFLINE_REVIEW_REQUIRED:'Đơn đang được đề nghị hủy. Đã khóa gửi lại trong lúc quản lý đối soát.',CASH_REFUND_CONFIRMATION_REQUIRED:'Cần xác nhận đã hoàn đúng tiền cho khách trước khi duyệt hủy.',REVIEW_ALREADY_RESOLVED:'Đề nghị đã được xử lý. Hãy tải lại danh sách.',OFFLINE_SALE_ALREADY_COMMITTED:'Đơn đã lên server. Không thể hủy bản ghi offline; hãy kiểm tra đơn và dùng luồng hủy/hoàn tiền.',ONLINE_ORDER_EXISTS:'Server đã có đơn từ yêu cầu này. Hãy kiểm tra đơn trước khi xử lý; không tạo lại đơn mới.',REVIEW_NOT_FOUND:'Không tìm thấy đề nghị được cấp quyền.',OPEN_SHIFT_REQUIRED:'Bạn cần mở ca trước khi thu hoặc hoàn tiền.',INSUFFICIENT_PAYMENT:'Số tiền nhận chưa đủ hoặc vượt giới hạn cho phép.',TRANSFER_CONFIRMATION_REQUIRED:'Cần nhận đúng số tiền và xác nhận đã kiểm tra chuyển khoản.',CASH_INSUFFICIENT:'Tiền mặt dự kiến trong ca không đủ để hoàn đơn này.',SHIFT_CLOSED:'Ca đã đóng. Hãy tải lại dữ liệu.',REASON_REQUIRED:'Nhập lý do từ 3 đến 500 ký tự.',ORDER_FINALIZED:'Đơn đã hoàn tất. Không thể thu tiền hoặc sửa lần nữa.',VERSION_CONFLICT:'Đơn đã được máy khác cập nhật. Mở lại đơn để xem dữ liệu mới.',PERMISSION_DENIED:'Bạn chưa được cấp quyền thực hiện thao tác này.',IDEMPOTENCY_KEY_REUSED:'Yêu cầu đã thay đổi. Hãy tải lại danh sách đơn.', '23505':'Tên bàn bị trùng hoặc bàn đã có đơn đang mở.',VARIANT_UNAVAILABLE:'Một size đã ngừng bán. Hãy kiểm tra thực đơn.',DELIVERY_DETAILS_REQUIRED:'Đơn giao hàng cần số điện thoại và địa chỉ.'};
   status(messages[code]||'Chưa xác nhận được thao tác. Kiểm tra kết nối rồi thử lại cùng yêu cầu.');
- }finally{document.querySelectorAll('#salesPanel button').forEach(b=>{b.disabled=false;});el('saveOrder').disabled=!context.can_sell;el('stores').disabled=el('stores').options.length===0;}
+ }finally{if(activeRun===token){activeRun=null;document.querySelectorAll('#salesPanel button').forEach(b=>{b.disabled=false;});el('saveOrder').disabled=!context.can_sell;el('stores').disabled=el('stores').options.length===0;renderSaveRecovery();}token.resolve();}
 }
 function renderSelection(){
  const pid=el('productChoice').value;
@@ -85,6 +90,7 @@ async function refresh(){
  return !limited;
 }
 async function openOrder(order){
+ if(saveRecovery){status('Cần xác nhận yêu cầu lưu cũ trước khi mở đơn khác.');return;}
  const current=generation;
  const lines=await rows('order_items','*',`&order_id=eq.${order.id}`);
  if(current!==generation)return;
@@ -118,30 +124,57 @@ el('addItem').addEventListener('click',()=>{
  const quantity=Number(el('itemQuantity').value);if(!Number.isInteger(quantity)||quantity<1||quantity>999){status('Số lượng từ 1 đến 999.');return;}
  dirty=true;cart.push({variant_id:v.id,modifier_ids:selected.map(m=>m.id),quantity,name:`${p.name} / ${v.name}${selected.length?' + '+selected.map(m=>m.name).join(', '):''}`,unit:Number(v.price)+selected.reduce((s,m)=>s+Number(m.price),0)});pending=null;renderCart();
 });
-el('newOrder').addEventListener('click',()=>{reset();status('Đã mở giỏ hàng mới.');});
+el('newOrder').addEventListener('click',()=>{if(saveRecovery)return;reset();status('Đã mở giỏ hàng mới.');});
 el('reloadOrders').addEventListener('click',()=>run(async()=>{const online=await refresh();status(online?'Đã tải dữ liệu mới nhất.':'Chưa kết nối được server. Đang dùng menu lưu tại máy để tạo đơn mới.');}));
+function renderSaveRecovery(){
+ el('saveRecoveryArea').hidden=!saveRecovery;
+ el('saveRecoveryInfo').textContent=saveRecovery?'Mã yêu cầu: '+saveRecovery.operationId+' · '+(saveRecovery.payload.p_order_id?'Sửa đơn '+saveRecovery.payload.p_order_id:'Đơn mới')+' · '+new Date(saveRecovery.createdAt).toLocaleString('vi-VN'):'';
+ const locked=!!saveRecovery||activeRun?.generation===generation;
+ document.querySelectorAll('#orderForm input,#orderForm select,#addItem,#newOrder,#cartItems button,#openOrders button').forEach(node=>{node.disabled=locked;});
+ el('retryOrderSave').disabled=!context.can_sell||activeRun?.generation===generation;
+}
+function restoreSaveCart(record){
+ cart=record.display?.cart||[];editing=record.display?.editing||null;dirty=true;pending={id:record.operationId,fingerprint:JSON.stringify(record.payload)};
+ el('channelChoice').value=record.payload.p_channel;el('positionChoice').value=record.payload.p_position_id||'';
+ el('customerName').value=record.payload.p_customer?.name||'';el('customerPhone').value=record.payload.p_customer?.phone||'';el('customerAddress').value=record.payload.p_customer?.address||'';renderCart();
+}
+async function submitSavedIntent(payload,id,display,ownsCart=true){
+ const queue=outbox,client=api,target=store,current=generation;
+ let result;
+ try{
+  result=await saveOrderDurably(queue,payload,id,display,(request,operationId)=>{
+   if(!navigator.onLine)throw new TypeError('NETWORK_ERROR');
+   return client.request('/rest/v1/rpc/rpc_save_order',{method:'POST',body:{...request,p_org_id:target.organization_id,p_store_id:target.id,p_operation_id:operationId}});
+  },record=>{if(current===generation){saveRecovery=record;recoveryOwnsCart=ownsCart;renderSaveRecovery();}});
+ }catch(error){
+  if(current!==generation)throw error;
+  if(error instanceof TypeError&&!payload.p_order_id&&ownsCart){
+   await enqueueLocal(false,id,true);saveRecovery=null;return;
+  }
+  const record=await queue.pendingSave();saveRecovery=record;
+  if(record&&error.message==='SAVE_RECOVERY_REQUIRED')recoveryOwnsCart=false;
+  if(record&&!ownsCart)recoveryOwnsCart=false;
+  if(!record)recoveryOwnsCart=false;
+  throw error;
+ }
+ if(current!==generation)return;
+ saveRecovery=null;
+ if(ownsCart)reset();
+ await refresh();
+ if(ownsCart&&result.order_id){const order=orders.find(o=>o.id===result.order_id);if(order)await openOrder(order);}
+ if(result.status==='REVIEW_REQUIRED'){status('Đơn đang được đề nghị hủy. Không tạo lại yêu cầu trong lúc quản lý đối soát.');return;}
+ if(result.status==='CANCELLED'){status('Yêu cầu này đã được quản lý duyệt hủy sau đối soát. Không tạo thêm đơn.');return;}
+ status(ownsCart?`Đã lưu đơn ${result.order_id.slice(0,8)} · Tổng tiền server: ${money(result.total_amount)}. Có thể thu tiền sau khi mở ca.`:'Đã xác nhận yêu cầu gốc. Giỏ đang soạn vẫn được giữ.');
+}
+el('retryOrderSave').addEventListener('click',()=>run(async()=>{if(saveRecovery)await submitSavedIntent(saveRecovery.payload,saveRecovery.operationId,saveRecovery.display,recoveryOwnsCart);}));
 el('orderForm').addEventListener('submit',e=>{
  e.preventDefault();if(!context.can_sell)return;
  run(async()=>{
-  const current=generation;
+  if(saveRecovery){await submitSavedIntent(saveRecovery.payload,saveRecovery.operationId,saveRecovery.display,recoveryOwnsCart);return;}
   if(!cart.length){status('Thêm ít nhất một món trước khi lưu.');return;}
   const payload={p_channel:el('channelChoice').value,p_position_id:el('channelChoice').value==='DINE_IN'?(el('positionChoice').value||null):null,p_items:cart.map(({variant_id,modifier_ids,quantity})=>({variant_id,modifier_ids,quantity})),p_customer:{name:el('customerName').value.trim(),phone:el('customerPhone').value.trim(),address:el('customerAddress').value.trim()},p_order_id:editing?.id||null,p_expected_revision:editing?.revision||null};
-  const fingerprint=JSON.stringify(payload);
-  if(!pending||pending.fingerprint!==fingerprint)pending={id:crypto.randomUUID(),fingerprint};
-  let result;
-  try {
-    if (!navigator.onLine) throw new TypeError('NETWORK_ERROR');
-    result=await rpc('rpc_save_order',{...payload,p_operation_id:pending.id});
-  } catch(error) {
-    if (!(error instanceof TypeError)) throw error;
-    if (editing) { status('Mất mạng: chưa hỗ trợ sửa đơn server khi offline. Giỏ vẫn được giữ.'); return; }
-    await enqueueLocal(false,pending.id); return;
-  }
-  if(current!==generation)return;
-  if(result.status==='REVIEW_REQUIRED'){status('Đơn đang được đề nghị hủy. Không tạo lại yêu cầu trong lúc quản lý đối soát.');return;}
-  if(result.status==='CANCELLED'){reset();await refresh();status('Yêu cầu này đã được quản lý duyệt hủy sau đối soát. Không tạo thêm đơn.');return;}
-  pending=null;reset();await refresh();const order=orders.find(o=>o.id===result.order_id);if(order)await openOrder(order);
-  status(`Đã lưu đơn ${result.order_id.slice(0,8)} · Tổng tiền server: ${money(result.total_amount)}. Có thể thu tiền sau khi mở ca.`);
+  const fingerprint=JSON.stringify(payload);if(!pending||pending.fingerprint!==fingerprint)pending={id:crypto.randomUUID(),fingerprint};
+  await submitSavedIntent(payload,pending.id,{cart:structuredClone(cart),editing:structuredClone(editing)},true);
  });
 });
 el('productForm').addEventListener('submit',e=>{
@@ -156,6 +189,7 @@ priceRow('variant');
 window.addEventListener('workspace:ready',async e=>{
  const current=++generation;const detail=e.detail;
  staffPanel?.destroy();staffPanel=null;historyPanel?.destroy();historyPanel=null;
+ saveRecovery=null;recoveryOwnsCart=false;el('saveRecoveryArea').hidden=true;el('saveRecoveryInfo').textContent='';
  el('salesPanel').hidden=true;context={};limited=false;currentShift=null;payments=[];financePending.clear();reset();
  outbox=null;reviewPanel=null;el('offlineReviewArea').hidden=true;el('offlineReviewList').replaceChildren();
  if(!detail?.store)return;
@@ -165,6 +199,8 @@ window.addEventListener('workspace:ready',async e=>{
   const result=await rpc('rpc_store_context',{});if(current!==generation)return;
   context=result;el('catalogAdmin').hidden=!context.can_manage_catalog;el('sellingArea').hidden=!context.can_sell;
   await refresh();if(current!==generation)return;
+  saveRecovery=await outbox.pendingSave();if(current!==generation)return;
+  if(saveRecovery){recoveryOwnsCart=true;restoreSaveCart(saveRecovery);}
   el('salesPanel').hidden=false;status('Đã tải dữ liệu cửa hàng. Có thể lưu đơn mới vào hàng đợi tại máy khi mất mạng.');
   await showOutbox();
   try{await receiveOfflineReviews(api,store,outbox);}catch(error){
@@ -172,7 +208,7 @@ window.addEventListener('workspace:ready',async e=>{
    if(current===generation)status('Chưa nhận được kết quả đối soát từ server. Hàng đợi tại máy vẫn được giữ và hiển thị.');
   }
   if(current!==generation)return;
-  await showOutbox();
+  await showOutbox();renderSaveRecovery();
   historyPanel=new OrderHistoryPanel({client:api,store,canRead:context.can_sell||context.can_report,run,isCurrent:()=>current===generation});
   staffPanel=new StaffAccessPanel({client:api,store,canManage:context.can_manage_staff,run,isCurrent:()=>current===generation,message:status});
   reviewPanel=new OfflineReviewPanel({client:api,store,canReview:context.can_review_offline,run,isCurrent:()=>current===generation,onResolved:async receipt=>{
@@ -243,8 +279,8 @@ el('reportForm').addEventListener('submit',e=>{e.preventDefault();run(async()=>{
  el('reportSummary').textContent=`${report.date} · ${report.timezone} · ${report.paid_orders} thanh toán · Đã thu ${money(report.gross)} · Hoàn ${money(report.refunds)} · Thu ròng ${money(Number(report.gross)-Number(report.refunds))}`;
 });});
 
-async function enqueueLocal(cash,operationId=null){
- if(pending&&!operationId){status('Lần lưu online trước chưa rõ kết quả. Bấm Lưu đơn hàng để thử lại cùng yêu cầu trước khi ghi nhận tiền mặt hoặc tạo bản lưu tại máy.');return;}
+async function enqueueLocal(cash,operationId=null,finishSave=false){
+ if((pending||saveRecovery)&&!operationId){status('Lần lưu online trước chưa rõ kết quả. Bấm Lưu đơn hàng để thử lại cùng yêu cầu trước khi ghi nhận tiền mặt hoặc tạo bản lưu tại máy.');return;}
  operationId??=crypto.randomUUID();
  if(!outbox||!api?.signedIn||!context.can_sell)throw new Error('AUTH_REQUIRED');
  if(editing){status('Chỉ hỗ trợ đơn mới trong hàng đợi offline.');return;}
@@ -261,7 +297,7 @@ async function enqueueLocal(cash,operationId=null){
  await queue.enqueue({p_channel:channel,p_position_id:position,
   p_items:cart.map(({variant_id,modifier_ids,quantity})=>({variant_id,modifier_ids,quantity})),
   p_customer:customer,p_expected_total:total,p_shift_id:cash?currentShift.id:null,
-  p_payment_operation_id:cash?crypto.randomUUID():null,p_received_amount:received},operationId,{lines:cart.map(({name,quantity,unit})=>({name,quantity,unit})),position:el('positionChoice').selectedOptions[0]?.textContent||''});
+  p_payment_operation_id:cash?crypto.randomUUID():null,p_received_amount:received},operationId,{lines:cart.map(({name,quantity,unit})=>({name,quantity,unit})),position:el('positionChoice').selectedOptions[0]?.textContent||''},{finishSave});
  if(current!==generation)return;
  reset();el('offlineCashForm').reset();await showOutbox();
  status(cash?'Đã lưu tại máy việc nhận tiền mặt. Chưa xác nhận trên server; cần đồng bộ trước khi chốt ca.':'Đã lưu đơn bền vững tại máy. Đơn đang chờ đồng bộ.');
@@ -337,4 +373,4 @@ el('queueOrder').addEventListener('click',()=>run(()=>enqueueLocal(false)));
 el('offlineCashForm').addEventListener('submit',e=>{e.preventDefault();run(()=>enqueueLocal(true));});
 el('syncOutbox').addEventListener('click',()=>run(()=>syncLocal()));
 el('retryOutbox').addEventListener('click',()=>run(()=>syncLocal(true)));
-window.addEventListener('online',()=>{if(api?.signedIn&&outbox)run(()=>syncLocal());});
+window.addEventListener('online',async()=>{const current=generation;await activeRun?.finished;if(current===generation&&api?.signedIn&&outbox)run(()=>syncLocal());});
