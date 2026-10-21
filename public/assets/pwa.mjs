@@ -2,7 +2,7 @@ const label = document.getElementById('offlineReady');
 function connection() {
   document.getElementById('connectionStatus').textContent = navigator.onLine
     ? 'Có kết nối mạng. Server sẽ kiểm tra lại giá và ca khi đồng bộ.'
-    : 'Đang mất mạng. Giữ trang mở để lưu đơn tại máy; tải lại trang cần đăng nhập khi có mạng.';
+    : 'Đang mất mạng. Giữ trang mở để lưu đơn tại máy; khôi phục phiên sau khi tải lại cần kết nối mạng.';
 }
 connection();
 window.addEventListener('online', connection);

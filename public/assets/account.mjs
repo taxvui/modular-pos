@@ -55,7 +55,9 @@ async function loadWorkspace(preferredStore) {
   selectedStore();
 }
 try {
-  client = new AuthClient({...(window.MODULAR_POS_CONFIG || {}),onSessionEnd:({reason})=>{
+  let sessionStorage = null;
+  try { sessionStorage = window.sessionStorage; } catch { /* Storage may be denied by the browser. */ }
+  client = new AuthClient({...(window.MODULAR_POS_CONFIG || {}),sessionStorage,onSessionEnd:({reason})=>{
     stores=[];el('stores').replaceChildren();el('identity').textContent='';el('storeSummary').textContent='';el('joinStoreForm').reset();
     panels();
     if(reason==='EXPIRED')message('Phiên đăng nhập đã hết hiệu lực. Đăng nhập lại để tiếp tục đồng bộ; đơn đã lưu tại máy vẫn được giữ.');
@@ -97,6 +99,15 @@ el('bootstrapForm').addEventListener('submit', event => {
   });
 });
 panels();
+
+if (client) perform(async () => {
+  message('Đang kiểm tra phiên đăng nhập…');
+  const user = await client.restoreSession();
+  if (!user) { message('Sẵn sàng đăng nhập.'); return; }
+  el('identity').textContent = user.email;
+  await loadWorkspace();
+  message('Đã khôi phục phiên đăng nhập.');
+});
 
 el('joinStoreForm').addEventListener('submit',event=>{
  event.preventDefault();perform(async()=>{

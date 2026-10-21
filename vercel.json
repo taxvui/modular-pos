@@ -6,6 +6,9 @@
   "buildCommand": "node scripts/build-vercel.mjs",
   "outputDirectory": "public",
   "cleanUrls": true,
+  "redirects": [
+    { "source": "/", "destination": "/account", "permanent": false }
+  ],
   "rewrites": [
     {
       "source": "/account",
