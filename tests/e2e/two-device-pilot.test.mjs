@@ -44,7 +44,10 @@ async function fixture(){
  for(const page of [a,b])page.on('pageerror',error=>errors.push(error.message));
  const origin='http://127.0.0.1:'+server.address().port;
  const login=async(page,account=staff)=>{
-  await page.goto(origin+'/pos');await page.locator('#email').fill(account.email);await page.locator('#password').fill(account.password);await page.locator('#loginForm button[type=submit]').click();
+  await page.goto(origin+'/pos');
+  await page.waitForFunction(()=>['Sẵn sàng đăng nhập.','Đã khôi phục phiên đăng nhập.'].includes(document.getElementById('status').textContent));
+  if(await page.locator('#workspacePanel').isVisible())assert.equal(await page.locator('#identity').textContent(),account.email);
+  else{await page.locator('#email').fill(account.email);await page.locator('#password').fill(account.password);await page.locator('#loginForm button[type=submit]').click();}
   await page.locator('#salesPanel').waitFor({state:'visible'});
   await page.waitForFunction(()=>!document.getElementById('reloadOrders').disabled);
  };
@@ -80,7 +83,7 @@ test('two real browser devices protect revisions, recover an offline cash sale a
   });
   await a.locator('#saveOrder').click();await message(a,'Chưa xác nhận');
   assert.equal((await staff.client.request('/rest/v1/orders?select=id&store_id=eq.'+workspace.store_id)).length,1);
-  await a.reload();await f.login(a);await a.locator('#saveRecoveryArea').waitFor({state:'visible'});
+  await a.reload();await a.locator('#saveRecoveryArea').waitFor({state:'visible'});
   const recovered=a.waitForResponse(r=>r.url().endsWith('/rpc/rpc_save_order')&&r.request().method()==='POST');
   await a.locator('#retryOrderSave').click();const recoveredResponse=await recovered;assert.equal(recoveredResponse.status(),200);
   assert.deepEqual(recoveredResponse.request().postDataJSON(),originalBody);const original=await recoveredResponse.json();await message(a,'Đã lưu đơn');await idle(a);

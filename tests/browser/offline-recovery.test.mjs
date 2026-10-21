@@ -112,7 +112,7 @@ test('cached shell reloads offline; catalog fallback is scoped and cannot bypass
   await page.waitForFunction(()=>document.getElementById('catalogStatus').textContent.startsWith('Đã tải menu'));
   // A fresh Auth/store-context check succeeds, but menu APIs fail during startup.
   state.outage=503;state.htmlError=true;
-  await page.reload();await login();
+  await page.reload();
   await page.locator('#salesPanel').waitFor({state:'visible'});
   assert.match(await page.locator('#catalogStatus').textContent(),/dữ liệu lưu tại máy/);
   assert.match(await page.locator('#productChoice').textContent(),/Cà phê/);
@@ -133,7 +133,7 @@ test('cached shell reloads offline; catalog fallback is scoped and cannot bypass
    const result=[];for(const key of await caches.keys())for(const request of await (await caches.open(key)).keys())result.push(request.url);return result;
   });
   assert.equal(cachedUrls.some(url=>url.includes('/backend/')),false,'API/Auth/customer responses never enter the shell cache');
-  state.reviewReadOutage=true;await page.reload();await login();
+  state.reviewReadOutage=true;await page.reload();
   await page.locator('#salesPanel').waitFor({state:'visible'});
   await page.waitForFunction(()=>document.getElementById('outboxSummary').textContent.startsWith('1 đơn'));
   assert.match(await page.locator('#salesStatus').textContent(),/Hàng đợi tại máy vẫn được giữ/);
@@ -148,7 +148,7 @@ test('cached shell reloads offline; catalog fallback is scoped and cannot bypass
   await page.waitForFunction(()=>document.getElementById('salesStatus').textContent.includes('chưa được cấp quyền'));
   assert.equal(await page.locator('#salesPanel').isVisible(),false,'Denied access cannot fall back to a cached catalog');
   // Reload starts a fresh online session; replay retains the original queued ID.
-  state.outage=0;await page.reload();await login();
+  state.outage=0;await page.reload();
   await page.locator('#salesPanel').waitFor({state:'visible'});
   await page.waitForFunction(()=>document.getElementById('outboxSummary').textContent.startsWith('1 đơn'));
   await page.locator('#syncOutbox').click();
@@ -286,7 +286,7 @@ test('an online save survives a committed 500, reload and account switch without
   const original=await journal();assert.equal(original.operationId,state.saveCalls[0].p_operation_id);assert.equal(state.savedOrders.length,1);
   assert.equal(await page.locator('#customerName').isDisabled(),true);assert.equal(await page.locator('#addItem').isDisabled(),true);assert.equal(await page.locator('#newOrder').isDisabled(),true);
   assert.equal(JSON.stringify(original).includes('secret-'),false);
-  await page.reload();await login();await page.locator('#saveRecoveryArea').waitFor({state:'visible'});assert.equal(await page.locator('#customerName').inputValue(),'Khách phục hồi');
+  await page.reload();await page.locator('#saveRecoveryArea').waitFor({state:'visible'});assert.equal(await page.locator('#customerName').inputValue(),'Khách phục hồi');
   assert.equal((await journal()).operationId,original.operationId);
   await page.locator('#logout').click();await page.locator('#loginPanel').waitFor({state:'visible'});assert.equal(await page.locator('#saveRecoveryInfo').textContent(),'');
   state.user='user-b';await login();await page.locator('#salesPanel').waitFor({state:'visible'});assert.equal(await page.locator('#saveRecoveryArea').isVisible(),false);
