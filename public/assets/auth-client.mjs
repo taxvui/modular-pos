@@ -1,24 +1,45 @@
 export class AuthClient {
   #token = null;
+  #refreshToken = null;
   #userId = null;
-  constructor({ url, key, fetcher = globalThis.fetch }) {
+  #expiresAt = Infinity;
+  #epoch = 0;
+  #refreshing = null;
+  constructor({ url, key, fetcher = globalThis.fetch, now = Date.now, onSessionEnd = () => {} }) {
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(parsed.hostname))) throw new Error('SUPABASE_HTTPS_REQUIRED');
     if (!key || key.includes('your-')) throw new Error('SUPABASE_NOT_CONFIGURED');
     this.url = parsed.href.replace(/\/$/, '');
     this.key = key;
     this.fetcher = fetcher.bind(globalThis);
+    this.now = now;
+    this.onSessionEnd = onSessionEnd;
   }
   get userId() { return this.#userId; }
   get signedIn() { return this.#token !== null; }
-  async request(path, { method = 'GET', body, authenticated = true } = {}) {
-    if (authenticated && !this.#token) throw new Error('AUTH_REQUIRED');
-    const response = await this.fetcher(`${this.url}${path}`, {
-      method,
-      headers: { apikey: this.key, 'Content-Type': 'application/json', ...(authenticated ? { Authorization: `Bearer ${this.#token}` } : {}) },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  #authError(code = 'AUTH_REQUIRED') { const error = new Error(code); error.status = 401; return error; }
+  #checkEpoch(epoch) { if (epoch !== this.#epoch) throw this.#authError('SESSION_CHANGED'); }
+  #clear(reason) {
+    const hadSession = this.signedIn;
+    this.#epoch++;
+    this.#token = null; this.#refreshToken = null; this.#userId = null; this.#expiresAt = Infinity;
+    if (hadSession) this.onSessionEnd({ reason });
+  }
+  #save(result) {
+    this.#token = result.access_token;
+    this.#refreshToken = result.refresh_token || null;
+    this.#userId = result.user.id;
+    this.#expiresAt = Number.isFinite(result.expires_at) ? result.expires_at * 1000 :
+      Number.isFinite(result.expires_in) && result.expires_in > 0 ? this.now() + result.expires_in * 1000 : Infinity;
+  }
+  #send(path, { method = 'GET', body } = {}, token = null) {
+    return this.fetcher(`${this.url}${path}`, {
+      method, cache: 'no-store',
+      headers: { apikey: this.key, 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      ...(body === undefined ? {} : { body }),
     });
-    if (response.status === 401 && authenticated) { this.#token = null; this.#userId = null; }
+  }
+  async #read(response) {
     let data = null;
     if (response.status !== 204) {
       try { data = await response.json(); }
@@ -37,21 +58,74 @@ export class AuthClient {
     }
     return data;
   }
+  async refreshSession() {
+    if (!this.#token) throw this.#authError();
+    const epoch = this.#epoch;
+    if (this.#refreshing?.epoch === epoch) return this.#refreshing.promise;
+    if (!this.#refreshToken) { this.#clear('EXPIRED'); throw this.#authError(); }
+    const refreshToken = this.#refreshToken, userId = this.#userId;
+    const entry = { epoch, promise: null };
+    entry.promise = (async () => {
+      let response;
+      try {
+        response = await this.#send('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: JSON.stringify({ refresh_token: refreshToken }) });
+        this.#checkEpoch(epoch);
+        // Temporary transport/rate-limit failures retain the in-memory session for retry.
+        if (!response.ok && (response.status >= 500 || response.status === 429)) return await this.#read(response);
+        if (!response.ok) { this.#clear('EXPIRED'); throw this.#authError(); }
+        const result = await this.#read(response);
+        this.#checkEpoch(epoch);
+        if (!result?.access_token || !result.refresh_token || result.user?.id !== userId) {
+          this.#clear('EXPIRED'); throw this.#authError();
+        }
+        this.#save(result);
+      } catch (error) {
+        // A successful rotation with an unreadable response cannot be acknowledged safely.
+        if (epoch === this.#epoch && response?.ok && error.message === 'INVALID_JSON_RESPONSE') this.#clear('EXPIRED');
+        throw error;
+      } finally { if (this.#refreshing === entry) this.#refreshing = null; }
+    })();
+    this.#refreshing = entry;
+    return entry.promise;
+  }
+  async request(path, { method = 'GET', body, authenticated = true } = {}) {
+    body = body === undefined ? undefined : JSON.stringify(body);
+    if (!authenticated) return this.#read(await this.#send(path, { method, body }));
+    if (!this.#token) throw this.#authError();
+    const epoch = this.#epoch;
+    if (this.#refreshToken && this.#expiresAt <= this.now() + 30000) await this.refreshSession();
+    this.#checkEpoch(epoch);
+    const token = this.#token;
+    let response = await this.#send(path, { method, body }, token);
+    this.#checkEpoch(epoch);
+    if (response.status === 401 && this.#refreshToken) {
+      // Another request may already have replaced the rejected token.
+      if (this.#token === token) await this.refreshSession();
+      this.#checkEpoch(epoch);
+      response = await this.#send(path, { method, body }, this.#token);
+      this.#checkEpoch(epoch);
+    }
+    if (response.status === 401) { this.#clear('EXPIRED'); throw this.#authError(); }
+    const data = await this.#read(response);
+    this.#checkEpoch(epoch);
+    return data;
+  }
   async signIn(email, password) {
-    this.#token = null;
-    this.#userId = null;
+    this.#clear('REPLACED');
+    const epoch = this.#epoch;
     const result = await this.request('/auth/v1/token?grant_type=password', { method: 'POST', authenticated: false, body: { email, password } });
-    if (!result.access_token || !result.user?.id) throw new Error('INVALID_AUTH_RESPONSE');
-    this.#token = result.access_token;
-    this.#userId = result.user.id;
+    this.#checkEpoch(epoch);
+    if (!result?.access_token || !result.user?.id) throw new Error('INVALID_AUTH_RESPONSE');
+    this.#save(result);
     return { id: result.user.id, email: result.user.email };
   }
   signUp(email, password) {
     return this.request('/auth/v1/signup', { method: 'POST', authenticated: false, body: { email, password } });
   }
   async signOut() {
-    try { if (this.#token) await this.request('/auth/v1/logout', { method: 'POST' }); }
-    finally { this.#token = null; this.#userId = null; }
+    const token = this.#token;
+    this.#clear('SIGNED_OUT');
+    if (token) await this.#read(await this.#send('/auth/v1/logout', { method: 'POST' }, token));
   }
   organizations() { return this.request('/rest/v1/organizations?select=id,name,slug&order=name'); }
   stores() { return this.request('/rest/v1/stores?select=id,organization_id,name,code,timezone&order=name'); }

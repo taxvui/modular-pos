@@ -12,7 +12,7 @@
 
 ## Giới hạn của đợt code
 
-- Token chỉ giữ trong bộ nhớ, không lưu localStorage; tải lại phải đăng nhập. Chưa tự refresh token hay hỗ trợ đăng nhập offline.
+- Access token và refresh token chỉ giữ trong bộ nhớ; tải lại phải đăng nhập. Có làm mới phiên tự động khi thao tác, chưa hỗ trợ đăng nhập offline; xem [phục hồi phiên](session-recovery.md).
 - Email phải được xác nhận để tạo workspace. Đăng ký tự động cần cấu hình SMTP, redirect URL và chính sách Auth trên Supabase staging/production.
 - Mỗi tài khoản tự tạo tối đa một workspace. Chủ quán có thể mời nhân viên và quản lý hai vai trò theo cửa hàng; xem [hướng dẫn nhân viên](staff-access.md). Menu và lưu đơn online được mô tả ở bên dưới.
 - Bảng core mở quyền đọc qua RLS; ghi trực tiếp từ client bị khóa. RPC bootstrap ghi dữ liệu atomically, không nhận actor/role từ client.
