@@ -7,10 +7,11 @@
   "scripts": {
     "build": "node scripts/build-vercel.mjs",
     "start": "node -e \"console.log('Use Vercel static serving from public/index.html')\"",
-    "test": "node --test packages/domain-specs/test/*.test.mjs tests/auth/*.test.mjs tests/database/*.test.mjs tests/orders/*.test.mjs",
+    "test": "node --test packages/domain-specs/test/*.test.mjs tests/auth/*.test.mjs tests/database/*.test.mjs tests/orders/*.test.mjs tests/deployment/*.test.mjs",
     "db:reset": "supabase db reset",
     "db:test": "supabase test db",
-    "test:db": "node --test tests/database/*.test.mjs"
+    "test:db": "node --test tests/database/*.test.mjs",
+    "check:deployment": "node scripts/check-deployment.mjs"
   },
   "engines": {
     "node": ">=18.18.0"
