@@ -1,7 +1,7 @@
 // The build replaces this marker with a hash of every precached asset.
 const CACHE = 'modular-pos-shell-__BUILD_ID__';
 const ASSETS = ['/account.html', '/app-config.js', '/assets/account.mjs',
-  '/assets/auth-client.mjs', '/assets/sales.mjs', '/assets/offline-store.mjs', '/assets/offline-review.mjs', '/assets/pwa.mjs'];
+  '/assets/auth-client.mjs', '/assets/sales.mjs', '/assets/offline-store.mjs', '/assets/offline-review.mjs', '/assets/staff-access.mjs', '/assets/pwa.mjs'];
 const PAGES = new Set(['/', '/account', '/account.html', '/login', '/admin', '/pos']);
 
 self.addEventListener('install', event => {

@@ -7,6 +7,7 @@ const message = text => { el('status').textContent = text; };
 function panels() {
   el('loginPanel').hidden = Boolean(client?.signedIn);
   el('workspacePanel').hidden = !client?.signedIn;
+  el('joinStorePanel').hidden = !client?.signedIn;
   if (!client?.signedIn) { el('bootstrapPanel').hidden = true; window.dispatchEvent(new CustomEvent('workspace:ready', { detail: null })); }
 }
 async function perform(action) {
@@ -19,6 +20,14 @@ async function perform(action) {
       WORKSPACE_ALREADY_EXISTS: 'Tài khoản đã có không gian làm việc.',
       '23505': 'Tài khoản đã có không gian làm việc hoặc mã thương hiệu đã được sử dụng.',
       AUTH_REQUIRED: 'Vui lòng đăng nhập lại.',
+      INVITATION_INVALID: 'Mã không hợp lệ, đã hết hạn hoặc không dành cho email đang đăng nhập.',
+      EMAIL_VERIFICATION_REQUIRED: 'Cần xác nhận email trước khi nhận quyền cửa hàng.',
+      OWNER_ACCESS_PROTECTED: 'Không thể thay quyền chủ sở hữu bằng mã nhân viên.',
+      STAFF_ACCESS_MANAGED_ELSEWHERE: 'Tài khoản đang có quyền tổ chức hoặc quyền tùy chỉnh; cần quản trị riêng.',
+      MEMBERSHIP_INACTIVE: 'Quyền thành viên tổ chức đang bị ngừng. Liên hệ chủ quán.',
+      ACCOUNT_DISABLED: 'Hồ sơ tài khoản đang bị ngừng.',
+      STAFF_ALREADY_ACTIVE: 'Tài khoản đã có quyền tại cửa hàng. Chủ quán có thể đổi quyền trong danh sách nhân viên.',
+      INVALID_STAFF_NAME: 'Tên hiển thị cần từ 2 đến 150 ký tự.',
       SUPABASE_NOT_CONFIGURED: 'Chưa cấu hình kết nối Supabase cho môi trường này.',
     };
     message(messages[error.message] || 'Không thực hiện được. Kiểm tra kết nối và thử lại.');
@@ -32,12 +41,14 @@ function selectedStore() {
   el('storeSummary').textContent = store ? `${store.name} · ${store.code}` : 'Chưa có cửa hàng được cấp quyền.';
   window.dispatchEvent(new CustomEvent('workspace:ready', { detail: { client, store } }));
 }
-async function loadWorkspace() {
+async function loadWorkspace(preferredStore) {
+  const previous=preferredStore||el('stores').value;
   const [organizations, accessibleStores] = await Promise.all([client.organizations(), client.stores()]);
   stores = accessibleStores;
   el('stores').replaceChildren(...stores.map(store => {
     const option = document.createElement('option'); option.value = store.id; option.textContent = store.name; return option;
   }));
+  if(stores.some(store=>store.id===previous))el('stores').value=previous;
   el('stores').disabled = stores.length === 0;
   el('bootstrapPanel').hidden = organizations.length !== 0;
   selectedStore();
@@ -68,6 +79,7 @@ el('signup').addEventListener('click', () => {
   });
 });
 el('logout').addEventListener('click', () => perform(async () => {
+  window.dispatchEvent(new CustomEvent('workspace:ready',{detail:null}));el('joinStoreForm').reset();
   try { await client.signOut(); } finally { stores = []; el('stores').replaceChildren(); el('identity').textContent = ''; }
   message('Đã đăng xuất.');
 }));
@@ -80,3 +92,11 @@ el('bootstrapForm').addEventListener('submit', event => {
   });
 });
 panels();
+
+el('joinStoreForm').addEventListener('submit',event=>{
+ event.preventDefault();perform(async()=>{
+  const result=await client.request('/rest/v1/rpc/rpc_accept_staff_invitation',{method:'POST',body:{p_token:el('joinStaffToken').value.trim(),p_full_name:el('joinStaffName').value.trim()}});
+  el('joinStaffToken').value='';await loadWorkspace(result.store_id);
+  message('Mã đã được tiếp nhận. Cửa hàng hiển thị theo quyền hiện tại của tài khoản.');
+ });
+});
