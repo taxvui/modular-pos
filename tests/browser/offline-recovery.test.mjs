@@ -6,7 +6,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 
 async function fixture() {
- const state={outage:0,user:'user-a',version:'v1',breakInstall:false,htmlError:false,sync:[],reviews:[],allowReview:false,cancelCalls:[],reviewReadOutage:false};
+ const state={outage:0,user:'user-a',version:'v1',breakInstall:false,htmlError:false,sync:[],reviews:[],allowReview:false,cancelCalls:[],reviewReadOutage:false,activeToken:'secret-session-token',rejectedToken:null,refreshCalls:[],refreshFailure:0};
  const root=path.resolve('public');
  const server=createServer(async(req,res)=>{
   const pathname=new URL(req.url,'http://local').pathname;
@@ -14,9 +14,17 @@ async function fixture() {
   if(pathname.startsWith('/backend/')){
    let body='';for await(const chunk of req)body+=chunk;
    body=body?JSON.parse(body):{};
-   if(pathname.includes('/token'))return json({access_token:'secret-session-token',user:{id:state.user,email:'owner@example.test'}});
+   if(pathname.includes('/token')){
+    if(new URL(req.url,'http://local').searchParams.get('grant_type')==='refresh_token'){
+     state.refreshCalls.push(body);
+     if(state.refreshFailure)return json({error_code:'refresh_token_not_found'},state.refreshFailure);
+     state.activeToken='secret-rotated-token';
+     return json({access_token:state.activeToken,refresh_token:'secret-rotated-refresh',expires_in:3600,user:{id:state.user,email:'owner@example.test'}});
+    }
+    state.activeToken='secret-session-token';return json({access_token:state.activeToken,refresh_token:'secret-refresh-token',expires_in:3600,user:{id:state.user,email:'owner@example.test'}});
+   }
    if(pathname.endsWith('/logout'))return json({});
-   if(req.headers.authorization!=='Bearer secret-session-token')return json({message:'AUTH_REQUIRED'},401);
+   if(req.headers.authorization!=='Bearer '+state.activeToken||req.headers.authorization==='Bearer '+state.rejectedToken)return json({message:'AUTH_REQUIRED'},401);
    if(pathname.endsWith('/organizations'))return json([{id:'org',name:'Cafe'}]);
    if(pathname.endsWith('/stores'))return json([{id:'store',organization_id:'org',name:'Cafe',code:'MAIN'}]);
    if(pathname.endsWith('/rpc_store_context'))return json({can_sell:true,can_manage_catalog:true,can_manage_shift:true,can_collect:true,can_review_offline:state.allowReview});
@@ -223,6 +231,37 @@ test('cashier proposes cancellation, manager confirms net refund and original de
    return (await new OfflineStore({url:location.origin+'/backend',userId:'user-a',organizationId:'org',storeId:'store'}).list())[0];
   });
   assert.equal(stored.status,'CANCELLED');assert.deepEqual(stored.payload,original.payload);
+  assert.deepEqual(errors,[]);
+ }finally{await f.close();}
+});
+
+
+test('session refresh is shared; rejected refresh returns to login and preserves the scoped offline queue',{timeout:60000},async()=>{
+ const f=await fixture(),{page,state,login}=f;const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ try{
+  await page.goto(f.origin+'/pos');await login();await page.locator('#salesPanel').waitFor({state:'visible'});
+  await page.locator('#addItem').click();await page.locator('#queueOrder').click();
+  await page.waitForFunction(()=>document.getElementById('outboxSummary').textContent.startsWith('1 đơn'));
+  state.rejectedToken=state.activeToken;
+  await page.locator('#reloadOrders').click();
+  await page.waitForFunction(()=>document.getElementById('salesStatus').textContent==='Đã tải dữ liệu mới nhất.');
+  assert.equal(state.refreshCalls.length,1,'Parallel catalog requests share one refresh');
+  assert.deepEqual(state.refreshCalls[0],{refresh_token:'secret-refresh-token'});
+  state.rejectedToken=state.activeToken;state.refreshFailure=400;
+  await page.locator('#reloadOrders').click();await page.locator('#loginPanel').waitFor({state:'visible'});
+  assert.equal(await page.locator('#salesPanel').isVisible(),false);assert.equal(await page.locator('#workspacePanel').isVisible(),false);
+  assert.equal(await page.locator('#identity').textContent(),'');assert.equal(await page.locator('#stores option').count(),0);
+  assert.match(await page.locator('#status').textContent(),/đã hết hiệu lực/);
+  const persisted=await page.evaluate(async()=>{
+   const {OfflineStore}=await import('/assets/offline-store.mjs');
+   return new OfflineStore({url:location.origin+'/backend',userId:'user-a',organizationId:'org',storeId:'store'}).list();
+  });
+  assert.equal(persisted.length,1);assert.equal(persisted[0].status,'PENDING');
+  assert.equal(JSON.stringify(persisted).includes('secret-'),false);
+  state.rejectedToken=null;state.refreshFailure=0;await login();await page.locator('#salesPanel').waitFor({state:'visible'});
+  await page.waitForFunction(()=>document.getElementById('outboxSummary').textContent.startsWith('1 đơn'));
+  await page.locator('#syncOutbox').click();await page.waitForFunction(()=>document.getElementById('outboxSummary').textContent.startsWith('0 đơn'));
+  assert.equal(state.sync.length,1);assert.equal(state.sync[0].p_operation_id,persisted[0].operationId);
   assert.deepEqual(errors,[]);
  }finally{await f.close();}
 });
