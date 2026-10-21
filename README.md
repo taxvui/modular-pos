@@ -21,6 +21,7 @@ POS cho quán cà phê: tại chỗ, mang về, giao hàng; hướng tới SaaS 
 - Phiên tự làm mới khi thao tác lâu; khi phiên không hợp lệ, giao diện trở về đăng nhập và giữ hàng đợi đã lưu.
 - Yêu cầu lưu đơn online được ghi bền vững trước khi gửi; tải lại/đăng nhập lại có thể xác nhận bằng mã gốc nếu phản hồi bị mất.
 - Tra cứu lịch sử đơn theo ngày/trạng thái/mã đơn hoặc khách; xem snapshot món, tiền đã thu/hoàn và lý do hủy, phân trang theo cửa hàng; chọn giao dịch cũ để hoàn toàn bộ có kiểm soát.
+- Nhật ký trong chi tiết đơn: người thực hiện, lưu/chuyển bàn/thu/hủy/hoàn, lý do và phân trang; chỉ đọc dữ liệu được phép tại cửa hàng.
 - Chuyển đơn tại bàn sang bàn trống với lý do và audit; giữ snapshot món/giá, kiểm tra revision và chống lặp yêu cầu.
 - Migration bổ sung cho cách ly tenant, kiểm soát chi nhánh, ràng buộc tenant trên khóa ngoại và chặn RPC sync chưa hoàn thiện.
 - Kiểm thử xác thực, cách ly dữ liệu trên PostgreSQL nhúng (PGlite), smoke test pgTAP và CI Supabase.
@@ -48,7 +49,7 @@ PGlite dùng một Auth shim tối thiểu và bỏ qua extension pgcrypto (gen_
 
 Đặt `NEXT_PUBLIC_SUPABASE_URL` và `NEXT_PUBLIC_SUPABASE_ANON_KEY` khi build, rồi mở `/account`. Không đưa service-role key vào biến công khai. Nếu chưa cấu hình, trang hiển thị lỗi cấu hình và khóa đăng nhập.
 
-Chi tiết: [Hướng dẫn kiểm thử MVP](docs/development/mvp-foundation.md), [nhân viên](docs/development/staff-access.md), [phiên đăng nhập](docs/development/session-recovery.md), [lịch sử đơn](docs/development/order-history.md), [đối soát ca](docs/development/shift-history.md), [chuyển bàn](docs/development/table-transfer.md), [phục hồi lưu đơn](docs/development/order-save-recovery.md).
+Chi tiết: [Hướng dẫn kiểm thử MVP](docs/development/mvp-foundation.md), [nhân viên](docs/development/staff-access.md), [phiên đăng nhập](docs/development/session-recovery.md), [lịch sử đơn](docs/development/order-history.md), [đối soát ca](docs/development/shift-history.md), [chuyển bàn](docs/development/table-transfer.md), [nhật ký đơn](docs/development/order-timeline.md), [phục hồi lưu đơn](docs/development/order-save-recovery.md).
 
 ## Thứ tự triển khai
 

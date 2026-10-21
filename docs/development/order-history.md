@@ -19,3 +19,5 @@ Dữ liệu lịch sử không vào cache offline. Cần kết nối mạng đ�
 - Pilot hai browser context với Supabase thật: sau thu/đồng bộ, tìm đúng đơn đã thanh toán qua giao diện, xem số tiền đã thu và tiền thừa.
 
 Không triển khai xuất file, in hóa đơn, hoàn một phần, chỉnh đơn đã thanh toán hoặc báo cáo thuế/giá vốn trong đợt này. KDS, in và kho nguyên liệu/BOM vẫn tạm hoãn.
+
+Nhật ký thao tác được tải riêng trong chi tiết đơn; xem [nhật ký đơn](order-timeline.md). Việc đọc nhật ký không thay đổi đơn hoặc giỏ đang soạn.
