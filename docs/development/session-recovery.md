@@ -1,6 +1,6 @@
 # Phiên đăng nhập khi làm việc lâu
 
-Auth client giữ access token và refresh token trong bộ nhớ của tab. Không lưu token vào localStorage, sessionStorage, IndexedDB hoặc cache của Service Worker. Tải lại hoặc đóng trang vẫn cần đăng nhập có mạng.
+Auth client giữ access token trong bộ nhớ. Giao diện dùng sessionStorage để lưu refresh token và ID tài khoản theo dự án, giúp [khôi phục phiên khi điều hướng](navigation-session.md) trong cùng tab qua Supabase. Không lưu mật khẩu, access token hoặc token vào localStorage, IndexedDB hay cache của Service Worker. Khôi phục sau tải lại cần có mạng.
 
 Trước một yêu cầu cần đăng nhập, nếu token còn không quá 30 giây theo thời hạn Auth trả về, client làm mới phiên. Nếu API trả 401, client làm mới rồi gửi lại đúng yêu cầu tối đa một lần. Các yêu cầu đồng thời dùng chung một lần đổi token; phản hồi 401 đến muộn dùng token vừa được đổi. Nội dung ghi và operation ID được chụp trước khi gửi, không thay đổi khi thử lại.
 

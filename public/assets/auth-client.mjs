@@ -5,7 +5,9 @@ export class AuthClient {
   #expiresAt = Infinity;
   #epoch = 0;
   #refreshing = null;
-  constructor({ url, key, fetcher = globalThis.fetch, now = Date.now, onSessionEnd = () => {} }) {
+  #storage;
+  #storageKey;
+  constructor({ url, key, fetcher = globalThis.fetch, now = Date.now, onSessionEnd = () => {}, sessionStorage = null }) {
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(parsed.hostname))) throw new Error('SUPABASE_HTTPS_REQUIRED');
     if (!key || key.includes('your-')) throw new Error('SUPABASE_NOT_CONFIGURED');
@@ -14,6 +16,8 @@ export class AuthClient {
     this.fetcher = fetcher.bind(globalThis);
     this.now = now;
     this.onSessionEnd = onSessionEnd;
+    this.#storage = sessionStorage;
+    this.#storageKey = `modular-pos-session:${this.url}`;
   }
   get userId() { return this.#userId; }
   get signedIn() { return this.#token !== null; }
@@ -23,6 +27,7 @@ export class AuthClient {
     const hadSession = this.signedIn;
     this.#epoch++;
     this.#token = null; this.#refreshToken = null; this.#userId = null; this.#expiresAt = Infinity;
+    this.#store(null);
     if (hadSession) this.onSessionEnd({ reason });
   }
   #save(result) {
@@ -31,6 +36,38 @@ export class AuthClient {
     this.#userId = result.user.id;
     this.#expiresAt = Number.isFinite(result.expires_at) ? result.expires_at * 1000 :
       Number.isFinite(result.expires_in) && result.expires_in > 0 ? this.now() + result.expires_in * 1000 : Infinity;
+    // Keep only the refresh credential across navigation in this tab, never passwords.
+    this.#store(this.#refreshToken ? { refresh_token: this.#refreshToken, user_id: this.#userId } : null);
+  }
+  #store(value) {
+    try {
+      if (value) this.#storage?.setItem(this.#storageKey, JSON.stringify(value));
+      else this.#storage?.removeItem(this.#storageKey);
+    } catch { /* Disabled storage leaves the in-memory session available. */ }
+  }
+  async restoreSession() {
+    const epoch = this.#epoch;
+    let saved;
+    try { saved = JSON.parse(this.#storage?.getItem(this.#storageKey) || 'null'); }
+    catch { this.#store(null); return null; }
+    if (!saved) return null;
+    if (typeof saved.refresh_token !== 'string' || !saved.refresh_token || typeof saved.user_id !== 'string' || !saved.user_id) {
+      this.#store(null); return null;
+    }
+    try {
+      const response = await this.#send('/auth/v1/token?grant_type=refresh_token', {
+        method: 'POST', body: JSON.stringify({ refresh_token: saved.refresh_token }),
+      });
+      this.#checkEpoch(epoch);
+      const result = await this.#read(response);
+      this.#checkEpoch(epoch);
+      if (!result?.access_token || !result.refresh_token || result.user?.id !== saved.user_id) throw this.#authError();
+      this.#save(result);
+      return { id: result.user.id, email: result.user.email };
+    } catch (error) {
+      if (epoch === this.#epoch && (error.status === 400 || error.status === 401 || error.status === 403)) this.#store(null);
+      throw error;
+    }
   }
   #send(path, { method = 'GET', body } = {}, token = null) {
     return this.fetcher(`${this.url}${path}`, {
